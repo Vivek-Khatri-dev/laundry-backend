@@ -1,0 +1,9 @@
+{
+  "services": {
+    "api": {
+      "root": ".",
+      "entrypoint": "Dockerfile.vercel",
+      "runtime": "container"
+    }
+  }
+}

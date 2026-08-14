@@ -1,0 +1,19 @@
+# Build stage
+FROM maven:3.8.6-openjdk-17 AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Runtime stage
+FROM openjdk:17-jre-slim
+WORKDIR /app
+# --- Vercel's critical configuration ---
+# The application must listen on the port provided in the $PORT environment variable,
+# which defaults to 80 on Vercel[citation:1][citation:4][citation:10].
+ENV PORT=8080
+EXPOSE $PORT
+# --- End of Vercel configuration ---
+COPY --from=build /app/target/*.jar app.jar
+ENTRYPOINT ["sh", "-c", "java -jar app.jar"]
