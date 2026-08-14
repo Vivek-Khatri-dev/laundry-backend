@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+  .report-toolbar-card { padding: 14px 20px; }
+
+  .report-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* Segmented pill tab bar */
+  .report-tabs {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--surface-sunken);
+    padding: 4px;
+    border-radius: 11px;
+    flex-shrink: 0;
+  }
+  .report-tab {
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .report-tab:hover { color: var(--ink); }
+  .report-tab.active {
+    background: var(--surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .report-toolbar-divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .report-controls-panel {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .report-controls-panel.active { display: flex; }
+
+  /* Compact inline label + input, sitting on one line with the tabs */
+  .report-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .report-field label {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  .report-field input { width: auto; min-width: 150px; }
+
+  .report-presets {
+    display: flex;
+    gap: 6px;
+    padding-left: 10px;
+    margin-left: 2px;
+    border-left: 1px solid var(--border);
+  }
+
+  @media (max-width: 860px) {
+    .report-toolbar-divider { display: none; }
+    .report-toolbar { gap: 12px; }
+  }
+  @media (max-width: 560px) {
+    .report-toolbar-card { padding: 14px 16px; }
+    .report-tabs { width: 100%; }
+    .report-tab { flex: 1; text-align: center; }
+    .report-controls-panel { width: 100%; }
+    .report-field { flex: 1; min-width: 0; }
+    .report-field input { width: 100%; min-width: 0; }
+    .report-presets { border-left: none; padding-left: 0; margin-left: 0; width: 100%; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 4px; }
+  }
+
+  .breakdown-table td, .breakdown-table th { white-space: nowrap; }
+  .breakdown-table .td-num { text-align: right; }
+</style>
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+
+renderShell({
+  active: "reports",
+  title: "Reports",
+  subtitle: "Totals and bill activity — by day, month, or a custom range"
+});
+
+const content = document.getElementById("content");
+const todayStr = localDateStr();
+
+// ------------------------------------------------------------------
+// Helpers for month / range math (all in the browser's local time,
+// same reasoning as localDateStr — avoid UTC day-shift bugs)
+// ------------------------------------------------------------------
+function currentMonthStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function monthBounds(monthStr) {
+  // monthStr = "YYYY-MM"
+  const [y, m] = monthStr.split("-").map(Number);
+  const from = `${y}-${String(m).padStart(2, "0")}-01`;
+  const lastDay = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this month
+  const to = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
+function daysAgoStr(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return localDateStr(d);
+}
+
+let mode = "daily"; // "daily" | "month" | "range"
+
+content.innerHTML = `
+  <div class="card card-pad report-toolbar-card mb-16">
+    <div class="report-toolbar">
+      <div class="report-tabs">
+        <button class="report-tab active" data-mode="daily">Daily</button>
+        <button class="report-tab" data-mode="month">This Month</button>
+        <button class="report-tab" data-mode="range">Custom Range</button>
+      </div>
+
+      <div class="report-toolbar-divider"></div>
+
+      <div class="report-controls-panel active" id="panel-daily">
+        <div class="report-field">
+          <label for="report-date">Date</label>
+          <input type="date" id="report-date" value="${todayStr}" max="${todayStr}">
+        </div>
+        <button class="btn btn-secondary btn-sm" id="today-btn">Today</button>
+      </div>
+
+      <div class="report-controls-panel" id="panel-month">
+        <div class="report-field">
+          <label for="report-month">Month</label>
+          <input type="month" id="report-month" value="${currentMonthStr()}">
+        </div>
+        <button class="btn btn-secondary btn-sm" id="this-month-btn">This Month</button>
+      </div>
+
+      <div class="report-controls-panel" id="panel-range">
+        <div class="report-field">
+          <label for="report-from">From</label>
+          <input type="date" id="report-from" value="${daysAgoStr(6)}" max="${todayStr}">
+        </div>
+        <div class="report-field">
+          <label for="report-to">To</label>
+          <input type="date" id="report-to" value="${todayStr}" max="${todayStr}">
+        </div>
+        <button class="btn btn-primary btn-sm" id="apply-range-btn">Apply</button>
+        <div class="report-presets">
+          <button class="btn btn-secondary btn-sm" data-days="7" title="Last 7 days">7d</button>
+          <button class="btn btn-secondary btn-sm" data-days="30" title="Last 30 days">30d</button>
+          <button class="btn btn-secondary btn-sm" data-days="90" title="Last 90 days">90d</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="report-region"><div class="loading-overlay"><span class="spinner dark"></span> Loading report…</div></div>
+`;
+
+// ------------------------------------------------------------------
+// Tab switching
+// ------------------------------------------------------------------
+document.querySelectorAll(".report-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    mode = tab.dataset.mode;
+    document.querySelectorAll(".report-tab").forEach(t => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".report-controls-panel").forEach(p => p.classList.remove("active"));
+    document.getElementById(`panel-${mode}`).classList.add("active");
+    runReport();
+  });
+});
+
+// ------------------------------------------------------------------
+// Daily controls
+// ------------------------------------------------------------------
+document.getElementById("report-date").addEventListener("change", runReport);
+document.getElementById("today-btn").addEventListener("click", () => {
+  document.getElementById("report-date").value = todayStr;
+  runReport();
+});
+
+// ------------------------------------------------------------------
+// Month controls
+// ------------------------------------------------------------------
+document.getElementById("report-month").addEventListener("change", runReport);
+document.getElementById("this-month-btn").addEventListener("click", () => {
+  document.getElementById("report-month").value = currentMonthStr();
+  runReport();
+});
+
+// ------------------------------------------------------------------
+// Custom range controls
+// ------------------------------------------------------------------
+document.getElementById("apply-range-btn").addEventListener("click", runReport);
+document.querySelectorAll(".report-presets [data-days]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const n = parseInt(btn.dataset.days);
+    document.getElementById("report-from").value = daysAgoStr(n - 1);
+    document.getElementById("report-to").value = todayStr;
+    runReport();
+  });
+});
+
+// ------------------------------------------------------------------
+// Dispatch to the right loader based on the active tab
+// ------------------------------------------------------------------
+function runReport() {
+  if (mode === "daily") {
+    loadDailyReport(document.getElementById("report-date").value);
+  } else if (mode === "month") {
+    const { from, to } = monthBounds(document.getElementById("report-month").value);
+    loadRangeReport(from, to, formatMonthLabel(document.getElementById("report-month").value));
+  } else {
+    const from = document.getElementById("report-from").value;
+    const to = document.getElementById("report-to").value;
+    if (!from || !to) return;
+    if (from > to) { toastError("'From' date must not be after 'To' date."); return; }
+    loadRangeReport(from, to, `${formatDate(from)} – ${formatDate(to)}`);
+  }
+}
+
+function formatMonthLabel(monthStr) {
+  const [y, m] = monthStr.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+runReport();
+
+// ------------------------------------------------------------------
+// DAILY REPORT (unchanged endpoint: GET /reports/daily?date=)
+// ------------------------------------------------------------------
+async function loadDailyReport(date) {
+  const region = document.getElementById("report-region");
+  region.innerHTML = `<div class="loading-overlay"><span class="spinner dark"></span> Loading report…</div>`;
+  try {
+    const report = await Api.get(`/reports/daily?date=${date}`);
+    const bills = report.bills || [];
+    const paidCount = bills.filter(b => b.status === "PAID").length;
+    const pendingCount = bills.filter(b => b.status === "PENDING").length;
+
+    region.innerHTML = `
+      <div class="stat-grid mb-16">
+        <div class="stat-card">
+          <div class="stat-icon">${Icons.ticket}</div>
+          <div class="stat-value">${report.billCount}</div>
+          <div class="stat-label">Bills on ${formatDate(report.date)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--success-soft);color:var(--success)">${Icons.cash}</div>
+          <div class="stat-value">${formatMoney(report.totalEarned)}</div>
+          <div class="stat-label">Total value billed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--success-soft);color:var(--success)">${Icons.checkCircle}</div>
+          <div class="stat-value">${paidCount}</div>
+          <div class="stat-label">Paid / delivered</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--warning-soft);color:var(--warning)">${Icons.clock}</div>
+          <div class="stat-value">${pendingCount}</div>
+          <div class="stat-label">Still pending</div>
+        </div>
+      </div>
+      ${billsTableCard("Bills on this day", bills)}
+    `;
+    wireBillRows(region);
+  } catch (err) {
+    region.innerHTML = `<div class="card card-pad"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+}
+
+// ------------------------------------------------------------------
+// RANGE / MONTH REPORT (new endpoint: GET /reports/range?from=&to=)
+// ------------------------------------------------------------------
+async function loadRangeReport(from, to, label) {
+  const region = document.getElementById("report-region");
+  region.innerHTML = `<div class="loading-overlay"><span class="spinner dark"></span> Loading report…</div>`;
+  try {
+    const report = await Api.get(`/reports/range?from=${from}&to=${to}`);
+    const bills = report.bills || [];
+    const breakdown = report.dailyBreakdown || [];
+
+    region.innerHTML = `
+      <div class="stat-grid mb-16">
+        <div class="stat-card">
+          <div class="stat-icon">${Icons.ticket}</div>
+          <div class="stat-value">${report.billCount}</div>
+          <div class="stat-label">Bills · ${escapeHtml(label)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--success-soft);color:var(--success)">${Icons.cash}</div>
+          <div class="stat-value">${formatMoney(report.totalEarned)}</div>
+          <div class="stat-label">Total value billed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--success-soft);color:var(--success)">${Icons.checkCircle}</div>
+          <div class="stat-value">${report.paidCount}</div>
+          <div class="stat-label">Paid / delivered</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--warning-soft);color:var(--warning)">${Icons.clock}</div>
+          <div class="stat-value">${report.pendingCount}</div>
+          <div class="stat-label">Still pending</div>
+        </div>
+      </div>
+
+      <div class="card mb-16">
+        <div class="card-head"><h2>Day-by-day breakdown</h2><div class="card-head-sub">${breakdown.length} day${breakdown.length === 1 ? "" : "s"} with activity</div></div>
+        <div class="table-wrap">
+          ${breakdown.length ? `
+            <table class="breakdown-table">
+              <thead><tr><th>Date</th><th class="td-num">Bills</th><th class="td-num">Total billed</th></tr></thead>
+              <tbody>
+                ${breakdown.map(d => `
+                  <tr class="clickable" data-jump-date="${d.date}">
+                    <td class="td-strong">${formatDate(d.date)}</td>
+                    <td class="td-num">${d.billCount}</td>
+                    <td class="td-num td-strong">${formatMoney(d.totalEarned)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : `<div class="empty-state">${Icons.chart}<h3>No activity in this range</h3><p>Try a different date range.</p></div>`}
+        </div>
+      </div>
+
+      ${billsTableCard(`All bills · ${label}`, bills)}
+    `;
+    wireBillRows(region);
+
+    // Clicking a day in the breakdown jumps straight to that day's Daily report
+    region.querySelectorAll("tr[data-jump-date]").forEach(row => {
+      row.addEventListener("click", () => {
+        const date = row.dataset.jumpDate;
+        document.querySelectorAll(".report-tab").forEach(t => t.classList.toggle("active", t.dataset.mode === "daily"));
+        document.querySelectorAll(".report-controls-panel").forEach(p => p.classList.remove("active"));
+        document.getElementById("panel-daily").classList.add("active");
+        document.getElementById("report-date").value = date;
+        mode = "daily";
+        loadDailyReport(date);
+      });
+    });
+  } catch (err) {
+    region.innerHTML = `<div class="card card-pad"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+}
+
+// ------------------------------------------------------------------
+// Shared bill list table + row click-through to bill-detail.html
+// ------------------------------------------------------------------
+function billsTableCard(title, bills) {
+  return `
+    <div class="card">
+      <div class="card-head"><h2>${escapeHtml(title)}</h2></div>
+      <div class="table-wrap">
+        ${bills.length ? `
+          <table>
+            <thead><tr><th>Receipt</th><th>Customer</th><th>Delivery</th><th>Total</th><th>Status</th><th>Cashier</th></tr></thead>
+            <tbody>
+              ${bills.map(b => `
+                <tr class="clickable" data-receipt="${b.receiptNo}">
+                  <td class="td-strong">#${String(b.receiptNo).padStart(3, "0")}</td>
+                  <td>${escapeHtml(b.customerName)}</td>
+                  <td class="td-muted">${formatDate(b.deliveryDate)}</td>
+                  <td class="td-num td-strong">${formatMoney(b.totalAmount)}</td>
+                  <td>${statusBadge(b.status)}</td>
+                  <td class="td-muted">${escapeHtml(b.createdBy || "—")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `<div class="empty-state">${Icons.ticket}<h3>No bills</h3><p>No billing activity in this window.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function wireBillRows(region) {
+  region.querySelectorAll("tr[data-receipt]").forEach(row => {
+    row.addEventListener("click", () => location.href = `bill-detail.html?receipt=${row.dataset.receipt}`);
+  });
+}
+</script>
+</body>
+</html>

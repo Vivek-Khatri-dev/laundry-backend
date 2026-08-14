@@ -1,0 +1,165 @@
+# ============================================================
+# SPRING BOOT / JAVA
+# ============================================================
+
+# Compiled class files
+*.class
+*.jar
+*.war
+*.ear
+target/
+build/
+out/
+
+# Maven build
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle build
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+gradle-wrapper.properties
+gradle/
+build/
+gradlew
+gradlew.bat
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.springBeans
+*.code-workspace
+.sts4-cache/
+
+# ============================================================
+# ENVIRONMENT VARIABLES & SECRETS (CRITICAL!)
+# ============================================================
+
+# Environment files (DO NOT COMMIT!)
+.env
+.env.*
+*.env
+application-*.properties
+!application.properties
+!application-template.properties
+!application-example.properties
+!application-dev-template.properties
+
+# Secret files
+secrets.yml
+secrets.yaml
+credentials.yml
+credentials.yaml
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+*.keystore
+*.truststore
+
+# ============================================================
+# DATABASE
+# ============================================================
+
+*.db
+*.sqlite
+*.sqlite3
+*.h2.db
+*.lock
+*.log
+*.trace.db
+
+# ============================================================
+# LOGS
+# ============================================================
+
+logs/
+*.log
+*.log.gz
+
+# ============================================================
+# OS FILES
+# ============================================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ============================================================
+# BACKUP FILES
+# ============================================================
+
+*.bak
+*.old
+*.orig
+*.rej
+*.tmp
+*.swp
+*.swo
+*~
+*.~
+
+# ============================================================
+# NODE / NPM (if you have frontend in same project)
+# ============================================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ============================================================
+# DOCKER
+# ============================================================
+
+docker-compose.override.yml
+*.pid
+docker-compose.*.yml
+!docker-compose.yml
+!docker-compose.example.yml
+
+# ============================================================
+# TESTING
+# ============================================================
+
+coverage/
+.nyc_output/
+test-results/
+test-output/
+*.test
+
+# ============================================================
+# MISC
+# ============================================================
+
+*.zip
+*.tar.gz
+*.rar
+*.7z
+temp/
+tmp/
+temp-data/
+*.swp

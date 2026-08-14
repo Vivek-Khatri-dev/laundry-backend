@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bill Detail · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+  .detail-layout{ display:grid; grid-template-columns:1fr 320px; gap:20px; align-items:start; }
+  @media (max-width:980px){ .detail-layout{ grid-template-columns:1fr; } }
+  .meta-list{ display:flex; flex-direction:column; gap:14px; }
+  .meta-row{ display:flex; justify-content:space-between; gap:12px; font-size:13px; }
+  .meta-row .k{ color:var(--ink-soft); }
+  .meta-row .v{ font-weight:600; text-align:right; }
+  .action-list{ display:flex; flex-direction:column; gap:8px; }
+  .receipt-total{ display:flex; justify-content:space-between; padding-top:12px; margin-top:8px; border-top:2px solid var(--border); font-family:var(--font-display); font-size:22px; color:var(--primary); font-weight:600; }
+  .custom-tag{ font-size:10px; color:var(--accent); font-weight:400; margin-left:6px; background:var(--accent-soft); padding:2px 8px; border-radius:10px; }
+  .discount-tag{ font-size:10px; color:var(--danger); font-weight:500; margin-left:6px; background:var(--danger-soft); padding:2px 8px; border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+
+const params = new URLSearchParams(location.search);
+const receiptNo = params.get("receipt");
+if (!receiptNo) location.href = "bills.html";
+
+console.log("🔍 Bill Detail page loaded. Receipt #:", receiptNo);
+
+renderShell({
+  active: "bills",
+  title: `Bill #${String(receiptNo).padStart(3, "0")}`,
+  subtitle: "Full order detail, receipt, and actions",
+  actions: `<a href="bills.html" class="btn btn-secondary">Back to bills</a>`
+});
+
+const content = document.getElementById("content");
+content.innerHTML = `<div class="loading-overlay"><span class="spinner dark"></span> Loading bill…</div>`;
+
+let BILL = null;
+let PRODUCTS = null;
+
+(async function init() {
+  try {
+    BILL = await Api.get(`/bills/${receiptNo}`);
+    console.log("✅ Bill loaded:", BILL);
+    render();
+    if (params.get("new")) toastSuccess("Bill saved. You can print or save the receipt below.");
+  } catch (err) {
+    console.error("❌ Failed to load bill:", err);
+    content.innerHTML = `<div class="card card-pad"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+})();
+
+function render() {
+  const isAdmin = Auth.isAdmin();
+  const editable = BILL.status === "PENDING";
+  console.log("📋 Rendering bill, status:", BILL.status);
+
+  // Calculate discount info
+  const hasDiscount = BILL.discountAmount && BILL.discountAmount > 0;
+  const finalTotal = BILL.finalAmount || BILL.totalAmount;
+
+  content.innerHTML = `
+    <div class="detail-layout">
+      <div class="card card-pad">
+        <div class="flex justify-between items-center" style="margin-bottom:6px;">
+          <h2>Order items</h2>
+          ${statusBadge(BILL.status)}
+        </div>
+        <p class="card-head-sub" style="margin-bottom:16px;">Billed ${formatDate(BILL.createDate)} by ${escapeHtml(BILL.createdBy || "—")}</p>
+
+        <table>
+          <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            ${BILL.items.map(i => {
+              // Check if this item has discount
+              const itemHasDiscount = i.discountAmount && i.discountAmount > 0;
+              const itemFinalPrice = i.finalPrice || i.subtotal;
+              const discountDisplay = itemHasDiscount ? 
+                `${i.discountType === 'PERCENTAGE' ? i.discountValue + '%' : 'Rs.' + i.discountValue} off` : '';
+              
+              return `
+              <tr>
+                <td class="td-strong">
+                  ${escapeHtml(i.name)}
+                  ${i.custom ? '<span class="custom-tag">Custom</span>' : ''}
+                  ${itemHasDiscount ? `<span class="discount-tag">${discountDisplay}</span>` : ''}
+                </td>
+                <td class="td-muted">${i.quantity}</td>
+                <td class="td-muted">${formatMoney(i.price)}</td>
+                <td class="td-num td-strong" style="text-align:right">
+                  ${formatMoney(itemFinalPrice)}
+                  ${itemHasDiscount ? `<span style="font-size:10px;color:var(--ink-faint);display:block;">(was ${formatMoney(i.subtotal)})</span>` : ''}
+                </td>
+              </tr>
+            `}).join("")}
+          </tbody>
+        </table>
+
+        <!-- Total with Discount -->
+        <div style="padding-top:12px; margin-top:8px; border-top:2px solid var(--border);">
+          ${hasDiscount ? `
+            <div style="display:flex; justify-content:space-between; font-size:14px; color:var(--ink-soft); padding:2px 0;">
+              <span>Subtotal</span>
+              <span>${formatMoney(BILL.totalAmount)}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:14px; color:var(--danger); padding:2px 0;">
+              <span>Discount (${BILL.discountType === 'PERCENTAGE' ? BILL.discountValue + '%' : 'Rs.' + BILL.discountValue})</span>
+              <span>- ${formatMoney(BILL.discountAmount)}</span>
+            </div>
+            <div style="border-top:1px dashed var(--border); margin:4px 0;"></div>
+          ` : ''}
+          <div class="receipt-total" style="border-top:none; padding-top:4px; margin-top:0;">
+            <span>Total</span>
+            <span>${formatMoney(finalTotal)}</span>
+          </div>
+        </div>
+
+        ${BILL.voidReason ? `
+          <div class="mt-16" style="background:var(--danger-soft);border-radius:10px;padding:12px 14px;">
+            <div class="text-sm" style="color:var(--danger); font-weight:700; margin-bottom:2px;">
+              ${BILL.status === "VOIDED" ? "Void reason" : "Return reason"}
+            </div>
+            <div class="text-sm" style="color:var(--danger)">${escapeHtml(BILL.voidReason)}</div>
+          </div>` : ""}
+
+        ${editable ? `
+          <hr class="divider">
+          <button class="btn btn-secondary" id="edit-btn">${Icons.edit} Edit this bill</button>
+        ` : `
+          <hr class="divider">
+          <p class="text-muted text-sm">This bill is ${BILL.status.toLowerCase()} and can no longer be edited.</p>
+        `}
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="card card-pad">
+          <h2 style="margin-bottom:14px;">Details</h2>
+          <div class="meta-list">
+            <div class="meta-row"><span class="k">Customer</span><span class="v">${escapeHtml(BILL.customerName)}</span></div>
+            <div class="meta-row"><span class="k">Phone</span><span class="v">${escapeHtml(BILL.customerPhone || "—")}</span></div>
+            <div class="meta-row"><span class="k">Email</span><span class="v">${escapeHtml(BILL.customerEmail || "—")}</span></div>
+            <div class="meta-row"><span class="k">Billed on</span><span class="v">${formatDate(BILL.createDate)}</span></div>
+            <div class="meta-row"><span class="k">Delivery due</span><span class="v">${formatDate(BILL.deliveryDate)}</span></div>
+            <div class="meta-row"><span class="k">Created by</span><span class="v">${escapeHtml(BILL.createdBy || "—")}</span></div>
+            ${BILL.updatedBy ? `<div class="meta-row"><span class="k">Last updated by</span><span class="v">${escapeHtml(BILL.updatedBy)}</span></div>` : ""}
+            ${hasDiscount ? `
+              <div class="meta-row" style="border-top:1px solid var(--border); padding-top:8px; margin-top:4px;">
+                <span class="k">Discount</span>
+                <span class="v" style="color:var(--danger);">
+                  ${BILL.discountType === 'PERCENTAGE' ? BILL.discountValue + '%' : 'Rs.' + BILL.discountValue}
+                  (${formatMoney(BILL.discountAmount)} off)
+                </span>
+              </div>
+              <div class="meta-row">
+                <span class="k" style="font-weight:700;">Final Total</span>
+                <span class="v" style="font-weight:700;color:var(--primary);font-size:16px;">${formatMoney(finalTotal)}</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <h2 style="margin-bottom:14px;">Actions</h2>
+          <div class="action-list">
+            <button class="btn btn-secondary btn-block" id="print-btn">${Icons.printer} Print receipt</button>
+            <button class="btn btn-secondary btn-block" id="pdf-btn">${Icons.file} Save receipt as PDF</button>
+            ${BILL.status === "PENDING" ? `<button class="btn btn-primary btn-block" id="paid-btn">${Icons.cash} Mark paid / delivered</button>` : ""}
+            ${(BILL.status === "PENDING" || BILL.status === "PAID") ? `<button class="btn btn-danger btn-block" id="return-btn">${Icons.undo} Return bill</button>` : ""}
+            ${isAdmin && (BILL.status === "PENDING" || BILL.status === "PAID") ? `<button class="btn btn-danger-solid btn-block" id="void-btn">${Icons.ban} Void bill</button>` : ""}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ============================================================
+  // PRINT BUTTON
+  // ============================================================
+  document.getElementById("print-btn").addEventListener("click", function(e) {
+    e.preventDefault();
+    console.log("🖨️ Print button clicked");
+    printReceipt();
+  });
+  
+  // ============================================================
+  // PDF BUTTON
+  // ============================================================
+  document.getElementById("pdf-btn").addEventListener("click", function(e) {
+    e.preventDefault();
+    console.log("📄 PDF button clicked");
+    downloadPdf();
+  });
+  
+  // ============================================================
+  // MARK PAID BUTTON
+  // ============================================================
+  document.getElementById("paid-btn")?.addEventListener("click", function(e) {
+    e.preventDefault();
+    console.log("💰 Mark Paid button clicked for receipt #", receiptNo);
+    markPaid();
+  });
+  
+  document.getElementById("return-btn")?.addEventListener("click", function(e) {
+    e.preventDefault();
+    console.log("🔄 Return button clicked");
+    voidOrReturn(true);
+  });
+  
+  document.getElementById("void-btn")?.addEventListener("click", function(e) {
+    e.preventDefault();
+    console.log("🚫 Void button clicked");
+    voidOrReturn(false);
+  });
+  
+  document.getElementById("edit-btn")?.addEventListener("click", function(e) {
+    e.preventDefault();
+    console.log("✏️ Edit button clicked");
+    openEditModal();
+  });
+}
+
+// ============================================================
+// PRINT RECEIPT
+// ============================================================
+async function printReceipt() {
+  const win = window.open('', '_blank', 'width=420,height=600,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes');
+
+  if (!win) {
+    toastError("Please allow pop-ups for this site to print receipts.");
+    return;
+  }
+  win.document.write("<p style='font-family:sans-serif;padding:24px;color:#666;'>Preparing receipt…</p>");
+  win.document.close();
+
+  try {
+    console.log("🖨️ Loading receipt for printing...");
+    toastSuccess("Loading receipt...");
+    
+    const html = await Api.get(`/bills/${receiptNo}/receipt.html`);
+    console.log("✅ Receipt HTML loaded, length:", html.length);
+    
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    
+    win.onload = function() {
+      setTimeout(function() {
+        win.focus();
+        win.print();
+      }, 500);
+    };
+    
+    setTimeout(function() {
+      try {
+        win.focus();
+        win.print();
+      } catch(e) {
+        console.log("Print fallback:", e);
+      }
+    }, 1000);
+    
+  } catch (err) {
+    win.close();
+    console.error("❌ Print failed:", err);
+    toastError("Failed to load receipt: " + apiErrorMessage(err));
+  }
+}
+
+// ============================================================
+// DOWNLOAD PDF
+// ============================================================
+async function downloadPdf() {
+  try {
+    console.log("📄 Downloading PDF for receipt #", receiptNo);
+    await Api.downloadBlob(`/bills/${receiptNo}/receipt.pdf`, `Receipt_${String(receiptNo).padStart(3, "0")}.pdf`);
+    toastSuccess("Receipt downloaded as PDF");
+  } catch (err) {
+    console.error("❌ PDF download failed:", err);
+    toastError(apiErrorMessage(err));
+  }
+}
+
+// ============================================================
+// MARK PAID
+// ============================================================
+async function markPaid() {
+  console.log("💰 markPaid() function called for receipt #", receiptNo);
+  
+  const ok = await confirmDialog({
+    title: "Mark bill as paid",
+    message: `Confirm that bill #${String(receiptNo).padStart(3, "0")} has been paid and delivered to the customer.`,
+    confirmLabel: "Mark paid"
+  });
+  
+  console.log("💰 User confirmed:", ok);
+  
+  if (!ok) return;
+  
+  try {
+    console.log("💰 Sending POST request to /bills/" + receiptNo + "/mark-paid");
+    const result = await Api.post(`/bills/${receiptNo}/mark-paid`);
+    console.log("✅ Bill marked as paid, response:", result);
+    
+    BILL = result;
+    toastSuccess("Bill marked as paid");
+    render();
+  } catch (err) {
+    console.error("❌ Failed to mark bill as paid:", err);
+    toastError(apiErrorMessage(err));
+  }
+}
+
+// ============================================================
+// VOID OR RETURN
+// ============================================================
+async function voidOrReturn(isReturn) {
+  console.log("🔄 voidOrReturn called, isReturn:", isReturn);
+  
+  const reason = await confirmDialog({
+    title: isReturn ? "Return this bill" : "Void this bill",
+    message: isReturn
+      ? "The customer is returning these items. This reverses the bill but keeps a full record."
+      : "This permanently marks the bill as void. It cannot be undone, but the record is kept for audit.",
+    confirmLabel: isReturn ? "Return bill" : "Void bill",
+    danger: true,
+    requireReason: true
+  });
+  
+  console.log("🔄 Reason provided:", reason);
+  
+  if (!reason) return;
+  
+  try {
+    const path = isReturn ? `/bills/${receiptNo}/return` : `/bills/${receiptNo}/void`;
+    console.log("🔄 Sending POST to:", path);
+    BILL = await Api.post(path, { reason });
+    console.log("✅ Bill status updated:", BILL.status);
+    toastSuccess(isReturn ? "Bill returned" : "Bill voided");
+    render();
+  } catch (err) {
+    console.error("❌ Failed to update bill:", err);
+    toastError(apiErrorMessage(err));
+  }
+}
+
+// ============================================================
+// EDIT MODAL - FULL IMPLEMENTATION
+// ============================================================
+async function openEditModal() {
+  console.log("✏️ Opening edit modal for receipt #", receiptNo);
+  
+  if (!PRODUCTS) {
+    try { 
+      const allProducts = await Api.get("/products");
+      PRODUCTS = allProducts.filter(p => p.custom !== true);
+      console.log("✅ Products loaded:", PRODUCTS.length);
+    }
+    catch (err) { 
+      console.error("❌ Failed to load products:", err);
+      toastError(apiErrorMessage(err)); 
+      return; 
+    }
+  }
+
+  let lines = BILL.items.map(i => {
+    const match = PRODUCTS.find(p => p.name === i.name);
+    return { 
+      productId: match ? match.id : null, 
+      name: i.name, 
+      price: Number(i.price), 
+      quantity: i.quantity, 
+      isCustom: i.custom || false,
+      discountType: i.discountType || 'PERCENTAGE',
+      discountValue: i.discountValue || 0
+    };
+  });
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay open";
+  overlay.innerHTML = `
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <h3 style="font-size:16px;">Edit bill #${String(receiptNo).padStart(3, "0")}</h3>
+        <button class="icon-btn" id="edit-close">${Icons.x}</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Customer name</label>
+            <input type="text" id="edit-name" value="${escapeHtml(BILL.customerName)}">
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <input type="tel" id="edit-phone" value="${escapeHtml(BILL.customerPhone || "")}">
+          </div>
+        </div>
+        <div class="field" style="max-width:200px;">
+          <label>Delivery in (days from today)</label>
+          <input type="number" id="edit-days" min="1" value="5">
+        </div>
+        <hr class="divider">
+        <h3 style="font-size:14px; margin-bottom:10px;">Add a product</h3>
+        <div class="product-grid" id="edit-product-grid" style="grid-template-columns:repeat(2,1fr); display:grid; gap:8px; max-height:180px; overflow-y:auto;">
+          ${PRODUCTS.map(p => `
+            <div class="product-chip" data-id="${p.id}" style="padding:9px 11px; border:1px solid var(--border-strong); border-radius:8px; cursor:pointer; background:var(--surface);">
+              <span class="name" style="font-size:12.5px;">${escapeHtml(p.name)}</span>
+              <span class="price" style="font-size:11.5px;">${formatMoney(p.price)}</span>
+            </div>
+          `).join("")}
+        </div>
+        <div style="margin-top:10px;">
+          <div class="product-chip custom-item" id="edit-custom-item" style="border-style:dashed;border-color:var(--accent);background:var(--accent-soft);cursor:pointer;padding:9px 11px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span class="name" style="color:var(--accent);font-size:12.5px;">➕ Custom Item</span>
+            <span class="price" style="color:var(--accent);font-size:11.5px;">Click to add</span>
+          </div>
+        </div>
+        <hr class="divider">
+        <h3 style="font-size:14px; margin-bottom:6px;">Items</h3>
+        <div id="edit-lines"></div>
+        <div class="receipt-total" id="edit-total"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" id="edit-cancel">Cancel</button>
+        <button class="btn btn-primary" id="edit-save">${Icons.check} Save changes</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  function openEditCustomItemModal() {
+    const customOverlay = document.createElement("div");
+    customOverlay.className = "modal-overlay open";
+    customOverlay.innerHTML = `
+      <div class="modal" style="max-width:440px;">
+        <div class="modal-head">
+          <h3 style="font-size:16px;">Custom Item</h3>
+          <button class="icon-btn" id="eci-close">${Icons.x}</button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label>Item Name *</label>
+            <input type="text" id="eci-name" placeholder="e.g. Curtain, Bag">
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label>Quantity *</label>
+              <input type="number" id="eci-quantity" min="1" value="1">
+            </div>
+            <div class="field">
+              <label>Price (per item) *</label>
+              <div class="input-affix">
+                <span>Rs.</span>
+                <input type="number" id="eci-price" min="0" step="10" placeholder="0">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-secondary" id="eci-cancel">Cancel</button>
+          <button class="btn btn-primary" id="eci-add">${Icons.plus} Add to Bill</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(customOverlay);
+
+    const closeCustom = () => customOverlay.remove();
+    customOverlay.querySelector("#eci-close").addEventListener("click", closeCustom);
+    customOverlay.querySelector("#eci-cancel").addEventListener("click", closeCustom);
+    customOverlay.addEventListener("click", (e) => { if (e.target === customOverlay) closeCustom(); });
+
+    customOverlay.querySelector("#eci-add").addEventListener("click", () => {
+      const name = customOverlay.querySelector("#eci-name").value.trim();
+      const quantity = parseInt(customOverlay.querySelector("#eci-quantity").value) || 1;
+      const price = parseFloat(customOverlay.querySelector("#eci-price").value);
+      
+      if (!name) { toastError("Please enter item name"); return; }
+      if (!price || price <= 0) { toastError("Please enter valid price"); return; }
+      if (quantity < 1) { toastError("Quantity must be at least 1"); return; }
+      
+      lines.push({
+        productId: null,
+        name: name,
+        price: price,
+        quantity: quantity,
+        isCustom: true,
+        discountType: 'PERCENTAGE',
+        discountValue: 0
+      });
+      
+      renderEditLines();
+      closeCustom();
+      toastSuccess(`Added "${name}" - Rs. ${price} x ${quantity}`);
+    });
+  }
+
+  overlay.querySelector("#edit-custom-item").addEventListener("click", openEditCustomItemModal);
+
+  function renderEditLines() {
+    const el = overlay.querySelector("#edit-lines");
+    if (!lines.length) {
+      el.innerHTML = `<p class="text-muted text-sm">No items — add at least one above.</p>`;
+    } else {
+      el.innerHTML = lines.map((l, i) => {
+        // Calculate discounted price for display
+        let finalPrice = l.price * l.quantity;
+        let discountAmount = 0;
+        if (l.discountType && l.discountValue > 0) {
+          if (l.discountType === 'PERCENTAGE') {
+            discountAmount = (l.price * l.quantity) * (l.discountValue / 100);
+          } else if (l.discountType === 'FIXED') {
+            discountAmount = Math.min(l.discountValue, l.price * l.quantity);
+          }
+          finalPrice = (l.price * l.quantity) - discountAmount;
+        }
+        
+        return `
+        <div class="line-item" style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);">
+          <span class="name" style="flex:1; font-weight:600; font-size:13px;">
+            ${escapeHtml(l.name)}
+            ${l.isCustom ? '<span style="font-size:10px;color:var(--accent);font-weight:400;margin-left:6px;">(Custom)</span>' : ''}
+          </span>
+          <div class="discount-group" style="display:flex; align-items:center; gap:4px;">
+            <select class="discount-type" data-i="${i}" style="padding:2px 4px;border:1px solid var(--border-strong);border-radius:4px;font-size:10px;background:var(--surface);width:32px;">
+              <option value="PERCENTAGE" ${l.discountType === 'PERCENTAGE' ? 'selected' : ''}>%</option>
+              <option value="FIXED" ${l.discountType === 'FIXED' ? 'selected' : ''}>Rs.</option>
+            </select>
+            <input type="number" class="discount-value" data-i="${i}" value="${l.discountValue || 0}" min="0" step="1" placeholder="0" style="width:40px;padding:2px 4px;border:1px solid var(--border-strong);border-radius:4px;font-size:10px;text-align:center;">
+          </div>
+          <div class="qty-stepper" style="display:flex; align-items:center; gap:6px;">
+            <button data-act="dec" data-i="${i}" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;">−</button>
+            <span style="min-width:22px;text-align:center;font-weight:600;">${l.quantity}</span>
+            <button data-act="inc" data-i="${i}" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;">+</button>
+          </div>
+          <span class="line-subtotal" style="min-width:80px;text-align:right;font-weight:600;">${formatMoney(finalPrice)}</span>
+          <button class="remove-line" data-act="remove" data-i="${i}" style="color:var(--ink-faint);background:none;border:none;cursor:pointer;display:flex;padding:4px;">${Icons.x}</button>
+        </div>
+      `}).join("");
+      
+      // Discount change handlers
+      el.querySelectorAll(".discount-type").forEach(select => {
+        select.addEventListener("change", function() {
+          const i = parseInt(this.dataset.i);
+          lines[i].discountType = this.value;
+          renderEditLines();
+        });
+      });
+      
+      el.querySelectorAll(".discount-value").forEach(input => {
+        input.addEventListener("change", function() {
+          const i = parseInt(this.dataset.i);
+          lines[i].discountValue = parseFloat(this.value) || 0;
+          renderEditLines();
+        });
+        input.addEventListener("input", function() {
+          const i = parseInt(this.dataset.i);
+          lines[i].discountValue = parseFloat(this.value) || 0;
+          renderEditLines();
+        });
+      });
+      
+      el.querySelectorAll("[data-act]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const i = Number(btn.dataset.i);
+          if (btn.dataset.act === "inc") lines[i].quantity += 1;
+          else if (btn.dataset.act === "dec") { lines[i].quantity -= 1; if (lines[i].quantity <= 0) lines.splice(i, 1); }
+          else lines.splice(i, 1);
+          renderEditLines();
+        });
+      });
+    }
+    
+    // Calculate total with discounts
+    let total = 0;
+    lines.forEach(l => {
+      let finalPrice = l.price * l.quantity;
+      if (l.discountType && l.discountValue > 0) {
+        if (l.discountType === 'PERCENTAGE') {
+          finalPrice = (l.price * l.quantity) * (1 - l.discountValue / 100);
+        } else if (l.discountType === 'FIXED') {
+          finalPrice = Math.max(0, (l.price * l.quantity) - l.discountValue);
+        }
+      }
+      total += finalPrice;
+    });
+    overlay.querySelector("#edit-total").innerHTML = `<span>Total</span><span>${formatMoney(total)}</span>`;
+  }
+  renderEditLines();
+
+  overlay.querySelectorAll("#edit-product-grid .product-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const id = Number(chip.dataset.id);
+      const product = PRODUCTS.find(p => p.id === id);
+      const existing = lines.find(l => l.productId === id && !l.isCustom);
+      if (existing) existing.quantity += 1;
+      else lines.push({ 
+        productId: id, 
+        name: product.name, 
+        price: Number(product.price), 
+        quantity: 1, 
+        isCustom: false,
+        discountType: 'PERCENTAGE',
+        discountValue: 0
+      });
+      renderEditLines();
+    });
+  });
+
+  const close = () => overlay.remove();
+  overlay.querySelector("#edit-close").addEventListener("click", close);
+  overlay.querySelector("#edit-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelector("#edit-save").addEventListener("click", async () => {
+    const customerName = overlay.querySelector("#edit-name").value.trim();
+    if (!customerName) { toastError("Customer name is required."); return; }
+    if (!lines.length) { toastError("Add at least one item."); return; }
+
+    const saveBtn = overlay.querySelector("#edit-save");
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<span class="spinner"></span> Saving…`;
+
+    const payload = {
+      customerName,
+      customerPhone: overlay.querySelector("#edit-phone").value.trim() || null,
+      deliveryInDays: Number(overlay.querySelector("#edit-days").value) || 5,
+      items: lines.map(l => ({ 
+        productId: l.isCustom ? null : l.productId, 
+        quantity: l.quantity,
+        isCustom: l.isCustom || false,
+        customName: l.isCustom ? l.name : null,
+        customPrice: l.isCustom ? l.price : null,
+        discountType: l.discountType || 'PERCENTAGE',
+        discountValue: l.discountValue || 0
+      }))
+    };
+
+    try {
+      BILL = await Api.put(`/bills/${receiptNo}`, payload);
+      toastSuccess("Bill updated");
+      close();
+      render();
+    } catch (err) {
+      toastError(apiErrorMessage(err));
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = `${Icons.check} Save changes`;
+    }
+  });
+}
+</script>
+</body>
+</html>

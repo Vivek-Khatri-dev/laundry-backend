@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Your Order · Dawson's Laundry</title>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .track-container {
+            max-width: 500px;
+            margin: 60px auto;
+            padding: 0 20px;
+        }
+        .track-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 32px 28px;
+            box-shadow: var(--shadow-md);
+        }
+        .track-card .brand {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .track-card .brand h1 {
+            font-family: var(--font-display);
+            color: var(--primary);
+            margin: 0;
+        }
+        .track-card .brand p {
+            color: var(--ink-soft);
+            margin: 4px 0 0;
+            font-size: 13px;
+        }
+        .track-card .field {
+            margin-bottom: 16px;
+        }
+        .track-card .field label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink-soft);
+        }
+        .track-card .field input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--border-strong);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .track-card .field input:focus {
+            border-color: var(--accent);
+            outline: none;
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+        .track-card .btn-track {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .track-card .btn-track:hover {
+            background: var(--accent-hover);
+        }
+        .track-card .btn-track:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .result-container {
+            margin-top: 20px;
+            display: none;
+        }
+        .result-container .order-details {
+            background: var(--surface-sunken);
+            border-radius: 8px;
+            padding: 16px 20px;
+            border: 1px solid var(--border);
+        }
+        .result-container .order-details .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .result-container .order-details .row:last-child {
+            border-bottom: none;
+        }
+        .result-container .order-details .label {
+            color: var(--ink-soft);
+        }
+        .result-container .order-details .value {
+            font-weight: 600;
+        }
+        .result-container .order-details .status-badge {
+            font-size: 13px;
+            padding: 4px 14px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .result-container .order-details .status-badge.pending { background: #FEF3C7; color: #92400E; }
+        .result-container .order-details .status-badge.processing { background: #DBEAFE; color: #1E40AF; }
+        .result-container .order-details .status-badge.ready { background: #D1FAE5; color: #065F46; }
+        .result-container .order-details .status-badge.paid { background: #EDE9FE; color: #5B21B6; }
+        .result-container .order-details .status-badge.voided { background: #FEE2E2; color: #991B1B; }
+        .result-container .order-details .status-badge.returned { background: #FEF3C7; color: #92400E; }
+        .result-container .error {
+            background: var(--danger-soft);
+            color: var(--danger);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .result-container .items-list {
+            margin-top: 8px;
+        }
+        .result-container .items-list .item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+            border-bottom: 1px dashed var(--border);
+        }
+        .result-container .items-list .item:last-child {
+            border-bottom: none;
+        }
+        .track-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--ink-faint);
+        }
+        .track-footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .track-footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="track-container">
+        <div class="track-card">
+            <div class="brand">
+                <h1>🧺 Dawson's Laundry</h1>
+                <p>Track Your Order Status</p>
+            </div>
+
+            <div class="field">
+                <label for="track-input">Enter Receipt Number</label>
+                <input type="text" id="track-input" placeholder="e.g. 001, 002, 003..." autofocus>
+            </div>
+
+            <button class="btn-track" id="track-btn">Track Order</button>
+
+            <div class="result-container" id="result-container">
+                <div id="result-content"></div>
+            </div>
+        </div>
+
+        <div class="track-footer">
+            <a href="login.html">Staff Login</a> · 
+            <a href="index.html">Home</a>
+        </div>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/app.js"></script>
+    <script>
+        const trackInput = document.getElementById('track-input');
+        const trackBtn = document.getElementById('track-btn');
+        const resultContainer = document.getElementById('result-container');
+        const resultContent = document.getElementById('result-content');
+
+        // Check URL params for receipt number
+        const params = new URLSearchParams(window.location.search);
+        const receiptParam = params.get('receipt');
+        if (receiptParam) {
+            trackInput.value = receiptParam;
+            trackOrder();
+        }
+
+        trackInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                trackOrder();
+            }
+        });
+
+        trackBtn.addEventListener('click', trackOrder);
+
+        async function trackOrder() {
+            const receiptNo = trackInput.value.trim();
+            if (!receiptNo) {
+                showError('Please enter a receipt number.');
+                return;
+            }
+
+            trackBtn.disabled = true;
+            trackBtn.textContent = 'Searching...';
+            resultContainer.style.display = 'block';
+            resultContent.innerHTML = `<div style="text-align:center;padding:20px;"><span class="spinner dark"></span> Loading...</div>`;
+
+            try {
+                const bill = await Api.get(`/bills/${receiptNo}`);
+                showBillDetails(bill);
+            } catch (err) {
+                if (err.status === 404) {
+                    showError(`Receipt #${receiptNo} not found. Please check the number and try again.`);
+                } else {
+                    showError('Something went wrong. Please try again later.');
+                }
+                console.error('Track error:', err);
+            } finally {
+                trackBtn.disabled = false;
+                trackBtn.textContent = 'Track Order';
+            }
+        }
+
+        function showBillDetails(bill) {
+            const statusClass = bill.status.toLowerCase();
+            const statusIcon = {
+                'PENDING': '⏳',
+                'PROCESSING': '🔧',
+                'READY': '✅',
+                'PAID': '💰',
+                'VOIDED': '🚫',
+                'RETURNED': '🔄'
+            }[bill.status] || '';
+
+            const statusLabel = {
+                'PENDING': 'Pending',
+                'PROCESSING': 'Processing',
+                'READY': 'Ready for Collection',
+                'PAID': 'Completed',
+                'VOIDED': 'Voided',
+                'RETURNED': 'Returned'
+            }[bill.status] || bill.status;
+
+            let itemsHtml = '';
+            if (bill.items && bill.items.length > 0) {
+                itemsHtml = '<div class="items-list">';
+                bill.items.forEach(item => {
+                    let priceDisplay = item.finalPrice ? item.finalPrice : item.subtotal;
+                    itemsHtml += `
+                        <div class="item">
+                            <span>${escapeHtml(item.name)} ${item.custom ? '<span style="color:var(--accent);font-size:10px;">(Custom)</span>' : ''}</span>
+                            <span>${item.quantity} × Rs. ${item.price}${item.discountAmount && item.discountAmount > 0 ? ' (Disc: -Rs.' + item.discountAmount + ')' : ''} = Rs. ${priceDisplay}</span>
+                        </div>
+                    `;
+                });
+                itemsHtml += '</div>';
+            }
+
+            let statusMessage = '';
+            if (bill.status === 'PENDING') {
+                statusMessage = 'Your order has been received and is waiting to be processed.';
+            } else if (bill.status === 'PROCESSING') {
+                statusMessage = 'Your order is currently being processed in the laundry.';
+            } else if (bill.status === 'READY') {
+                statusMessage = '✅ Your order is ready for collection! Please bring your receipt.';
+            } else if (bill.status === 'PAID') {
+                statusMessage = '💰 Your order has been completed and paid for. Thank you!';
+            } else if (bill.status === 'VOIDED') {
+                statusMessage = 'This order has been voided.';
+            } else if (bill.status === 'RETURNED') {
+                statusMessage = 'This order has been returned.';
+            }
+
+            let discountDisplay = '';
+            if (bill.discountAmount && bill.discountAmount > 0) {
+                discountDisplay = `<div class="row"><span class="label">Discount</span><span class="value">- Rs. ${bill.discountAmount}</span></div>`;
+            }
+
+            resultContent.innerHTML = `
+                <div class="order-details">
+                    <div class="row">
+                        <span class="label">Receipt #</span>
+                        <span class="value">${String(bill.receiptNo).padStart(3, '0')}</span>
+                    </div>
+                    <div class="row">
+                        <span class="label">Customer</span>
+                        <span class="value">${escapeHtml(bill.customerName)}</span>
+                    </div>
+                    <div class="row">
+                        <span class="label">Date</span>
+                        <span class="value">${formatDate(bill.createDate)}</span>
+                    </div>
+                    <div class="row">
+                        <span class="label">Delivery Date</span>
+                        <span class="value">${formatDate(bill.deliveryDate)}</span>
+                    </div>
+                    <div class="row">
+                        <span class="label">Status</span>
+                        <span class="value"><span class="status-badge ${statusClass}">${statusIcon} ${statusLabel}</span></span>
+                    </div>
+                    <div class="row">
+                        <span class="label">Subtotal</span>
+                        <span class="value">Rs. ${bill.totalAmount}</span>
+                    </div>
+                    ${discountDisplay}
+                    <div class="row" style="border-top:2px solid var(--primary);padding-top:8px;margin-top:4px;">
+                        <span class="label" style="font-weight:700;font-size:15px;">Total</span>
+                        <span class="value" style="font-weight:700;font-size:15px;color:var(--primary);">Rs. ${bill.finalAmount || bill.totalAmount}</span>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <span class="label">Items</span>
+                        ${itemsHtml}
+                    </div>
+                    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                        <p style="margin:0;font-size:13px;color:var(--ink-soft);">${statusMessage}</p>
+                    </div>
+                </div>
+            `;
+            resultContainer.style.display = 'block';
+        }
+
+        function showError(message) {
+            resultContent.innerHTML = `<div class="error">❌ ${escapeHtml(message)}</div>`;
+            resultContainer.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

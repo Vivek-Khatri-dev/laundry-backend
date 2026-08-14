@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Products · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+const isAdmin = Auth.isAdmin();
+
+renderShell({
+  active: "products",
+  title: "Products & Pricing",
+  subtitle: isAdmin ? "Manage the garment types and prices used across every bill" : "Garment types and prices used across every bill",
+  actions: isAdmin ? `<button class="btn btn-primary" id="add-product-btn">${Icons.plus} Add product</button>` : ""
+});
+
+const content = document.getElementById("content");
+content.innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>${isAdmin ? "All products" : "Active products"}</h2>
+        <div class="card-head-sub" id="result-count"></div>
+      </div>
+      ${isAdmin ? `
+        <div class="select-pills" id="filter-pills">
+          <button class="pill-btn active" data-f="active">Active</button>
+          <button class="pill-btn" data-f="all">All (incl. disabled)</button>
+        </div>` : ""}
+    </div>
+    <div class="table-wrap" id="table-region">
+      <div class="loading-overlay"><span class="spinner dark"></span> Loading products…</div>
+    </div>
+  </div>
+`;
+
+let PRODUCTS = [];
+let filter = "active";
+
+async function load() {
+  document.getElementById("table-region").innerHTML = `<div class="loading-overlay"><span class="spinner dark"></span> Loading products…</div>`;
+  try {
+    PRODUCTS = isAdmin && filter === "all" ? await Api.get("/products/all") : await Api.get("/products");
+    renderTable();
+  } catch (err) {
+    document.getElementById("table-region").innerHTML = `<div class="empty-state"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+}
+load();
+
+document.getElementById("filter-pills")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".pill-btn");
+  if (!btn) return;
+  document.querySelectorAll("#filter-pills .pill-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  filter = btn.dataset.f;
+  load();
+});
+
+function renderTable() {
+  document.getElementById("result-count").textContent = `${PRODUCTS.length} product${PRODUCTS.length === 1 ? "" : "s"}`;
+  const region = document.getElementById("table-region");
+  if (!PRODUCTS.length) {
+    region.innerHTML = `<div class="empty-state">${Icons.shirt}<h3>No products yet</h3><p>Add your first garment type to start billing customers.</p></div>`;
+    return;
+  }
+  region.innerHTML = `
+    <table>
+      <thead><tr><th>Product</th><th>Price</th><th>Status</th>${isAdmin ? "<th></th>" : ""}</tr></thead>
+      <tbody>
+        ${PRODUCTS.map(p => `
+          <tr>
+            <td class="td-strong">${escapeHtml(p.name)}</td>
+            <td class="td-num">${formatMoney(p.price)}</td>
+            <td><span class="state-dot ${p.active ? "on" : "off"}"></span>${p.active ? "Active" : "Disabled"}</td>
+            ${isAdmin ? `
+              <td>
+                <div class="row-actions">
+                  <button class="icon-btn" title="Edit price" data-edit="${p.id}">${Icons.edit}</button>
+                  <button class="icon-btn" title="${p.active ? "Disable" : "Enable"}" data-toggle="${p.id}" data-active="${p.active}">
+                    ${p.active ? Icons.ban : Icons.undo}
+                  </button>
+                </div>
+              </td>` : ""}
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+
+  region.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => openProductModal(PRODUCTS.find(p => p.id == btn.dataset.edit))));
+  region.querySelectorAll("[data-toggle]").forEach(btn => btn.addEventListener("click", () => toggleProduct(btn.dataset.toggle, btn.dataset.active === "true")));
+}
+
+async function toggleProduct(id, isActive) {
+  const ok = await confirmDialog({
+    title: isActive ? "Disable product" : "Enable product",
+    message: isActive
+      ? "Cashiers won't be able to add this to new bills. Existing bills are unaffected."
+      : "This product will be available for new bills again.",
+    confirmLabel: isActive ? "Disable" : "Enable",
+    danger: isActive
+  });
+  if (!ok) return;
+  try {
+    await Api.post(`/products/${id}/${isActive ? "disable" : "enable"}`);
+    toastSuccess(isActive ? "Product disabled" : "Product enabled");
+    load();
+  } catch (err) {
+    toastError(apiErrorMessage(err));
+  }
+}
+
+document.getElementById("add-product-btn")?.addEventListener("click", () => openProductModal(null));
+
+function openProductModal(product) {
+  const isEdit = !!product;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay open";
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <h3 style="font-size:16px;">${isEdit ? "Edit product" : "Add product"}</h3>
+        <button class="icon-btn" id="pm-close">${Icons.x}</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Product name</label>
+          <input type="text" id="pm-name" value="${isEdit ? escapeHtml(product.name) : ""}" placeholder="e.g. Shirt">
+        </div>
+        <div class="field">
+          <label>Price</label>
+          <div class="input-affix"><span>Rs.</span><input type="number" id="pm-price" min="0" step="1" value="${isEdit ? product.price : ""}" placeholder="0"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" id="pm-cancel">Cancel</button>
+        <button class="btn btn-primary" id="pm-save">${Icons.check} ${isEdit ? "Save changes" : "Add product"}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector("#pm-close").addEventListener("click", close);
+  overlay.querySelector("#pm-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelector("#pm-save").addEventListener("click", async () => {
+    const name = overlay.querySelector("#pm-name").value.trim();
+    const price = Number(overlay.querySelector("#pm-price").value);
+    if (!name) { toastError("Product name is required."); return; }
+    if (!price || price <= 0) { toastError("Enter a valid price."); return; }
+
+    const btn = overlay.querySelector("#pm-save");
+    btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Saving…`;
+    try {
+      if (isEdit) await Api.put(`/products/${product.id}`, { name, price });
+      else await Api.post("/products", { name, price });
+      toastSuccess(isEdit ? "Product updated" : "Product added");
+      close();
+      load();
+    } catch (err) {
+      toastError(apiErrorMessage(err));
+      btn.disabled = false; btn.innerHTML = `${Icons.check} ${isEdit ? "Save changes" : "Add product"}`;
+    }
+  });
+}
+</script>
+</body>
+</html>

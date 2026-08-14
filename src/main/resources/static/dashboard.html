@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+
+const session = Auth.get();
+const today = new Date().toISOString().slice(0, 10);
+
+renderShell({
+  active: "dashboard",
+  title: `Good ${dayPart()}, ${session.fullName.split(" ")[0]}`,
+  subtitle: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }),
+  actions: `<a href="new-bill.html" class="btn btn-primary">${Icons.plus} New Bill</a>`
+});
+
+function dayPart() {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
+}
+
+const content = document.getElementById("content");
+content.innerHTML = `<div class="loading-overlay"><span class="spinner dark"></span> Loading today's activity…</div>`;
+
+(async function init() {
+  try {
+    const report = await Api.get(`/reports/daily?date=${today}`);
+    const bills = report.bills || [];
+
+    // Calculate using discounted prices (finalAmount)
+    const paid = bills.filter(b => b.status === "PAID");
+    const pending = bills.filter(b => b.status === "PENDING");
+    const processing = bills.filter(b => b.status === "PROCESSING");
+    const ready = bills.filter(b => b.status === "READY");
+    const voidedOrReturned = bills.filter(b => b.status === "VOIDED" || b.status === "RETURNED");
+
+    // Total earned from PAID bills using discounted price
+    const totalEarned = paid.reduce((sum, b) => sum + (b.finalAmount || b.totalAmount), 0);
+
+    // Total bills created today (excluding voided/returned)
+    const activeBills = bills.filter(b => b.status !== "VOIDED" && b.status !== "RETURNED");
+
+    content.innerHTML = `
+      <div class="stat-grid mb-16">
+        <div class="stat-card">
+          <div class="stat-icon">${Icons.ticket}</div>
+          <div class="stat-value">${activeBills.length}</div>
+          <div class="stat-label">Bills created today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--success-soft);color:var(--success)">${Icons.cash}</div>
+          <div class="stat-value">${formatMoney(totalEarned)}</div>
+          <div class="stat-label">Collected today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--warning-soft);color:var(--warning)">${Icons.clock}</div>
+          <div class="stat-value">${pending.length + processing.length}</div>
+          <div class="stat-label">Awaiting delivery / payment</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--danger-soft);color:var(--danger)">${Icons.undo}</div>
+          <div class="stat-value">${voidedOrReturned.length}</div>
+          <div class="stat-label">Voided / returned today</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Today's bills</h2>
+            <div class="card-head-sub">Everything billed since midnight</div>
+          </div>
+          <a href="bills.html" class="btn btn-secondary btn-sm">View all bills</a>
+        </div>
+        <div class="table-wrap">
+          ${activeBills.length ? renderTable(activeBills) : renderEmpty()}
+        </div>
+      </div>
+    `;
+
+    content.querySelectorAll("tbody tr[data-receipt]").forEach(row => {
+      row.addEventListener("click", () => {
+        location.href = `bill-detail.html?receipt=${row.dataset.receipt}`;
+      });
+    });
+  } catch (err) {
+    content.innerHTML = `<div class="card card-pad"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+})();
+
+function renderTable(bills) {
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Receipt</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Cashier</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${bills.map(b => `
+          <tr class="clickable" data-receipt="${b.receiptNo}">
+            <td class="td-strong">#${String(b.receiptNo).padStart(3, "0")}</td>
+            <td>${escapeHtml(b.customerName)}</td>
+            <td class="td-muted">${b.items ? b.items.length : 0} item${b.items && b.items.length === 1 ? '' : 's'}</td>
+            <td class="td-num td-strong">${formatMoney(b.finalAmount || b.totalAmount)}</td>
+            <td>${statusBadge(b.status)}</td>
+            <td class="td-muted">${escapeHtml(b.createdBy || "—")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderEmpty() {
+  return `
+    <div class="empty-state">
+      ${Icons.ticket}
+      <h3>No bills yet today</h3>
+      <p>New bills you create will show up here as soon as they're saved.</p>
+      <a href="new-bill.html" class="btn btn-primary">${Icons.plus} Create the first bill</a>
+    </div>`;
+}
+</script>
+</body>
+</html>

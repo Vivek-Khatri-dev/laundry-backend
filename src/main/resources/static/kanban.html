@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Tracking · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+  .status-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .status-filter-btn {
+    padding: 8px 16px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-soft);
+  }
+  .status-filter-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .status-filter-btn.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+  }
+  .status-filter-btn .badge {
+    background: var(--border);
+    padding: 0 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--ink-soft);
+  }
+  .status-filter-btn.active .badge {
+    background: var(--primary);
+    color: #fff;
+  }
+  .status-filter-btn.pending { border-color: #F59E0B; }
+  .status-filter-btn.pending.active { background: #FEF3C7; border-color: #F59E0B; color: #92400E; }
+  .status-filter-btn.pending .badge { background: #F59E0B; color: #fff; }
+  
+  .status-filter-btn.processing { border-color: #3B82F6; }
+  .status-filter-btn.processing.active { background: #DBEAFE; border-color: #3B82F6; color: #1E40AF; }
+  .status-filter-btn.processing .badge { background: #3B82F6; color: #fff; }
+  
+  .status-filter-btn.ready { border-color: #10B981; }
+  .status-filter-btn.ready.active { background: #D1FAE5; border-color: #10B981; color: #065F46; }
+  .status-filter-btn.ready .badge { background: #10B981; color: #fff; }
+  
+  .status-filter-btn.paid { border-color: #8B5CF6; }
+  .status-filter-btn.paid.active { background: #EDE9FE; border-color: #8B5CF6; color: #5B21B6; }
+  .status-filter-btn.paid .badge { background: #8B5CF6; color: #fff; }
+
+  .order-table-wrap {
+    overflow-x: auto;
+    margin-top: 4px;
+  }
+  .order-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .order-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+    border-bottom: 2px solid var(--border);
+    background: var(--surface-sunken);
+    white-space: nowrap;
+  }
+  .order-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .order-table tr {
+    transition: background 0.15s ease;
+    cursor: pointer;
+  }
+  .order-table tr:hover {
+    background: var(--surface-sunken);
+  }
+  .order-table .receipt {
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+  .order-table .customer {
+    font-weight: 600;
+  }
+  .order-table .status-badge {
+    font-size: 11px;
+    padding: 3px 12px;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .order-table .status-badge.pending { background: #FEF3C7; color: #92400E; }
+  .order-table .status-badge.processing { background: #DBEAFE; color: #1E40AF; }
+  .order-table .status-badge.ready { background: #D1FAE5; color: #065F46; }
+  .order-table .status-badge.paid { background: #EDE9FE; color: #5B21B6; }
+  .order-table .status-badge.voided { background: #FEE2E2; color: #991B1B; }
+  .order-table .status-badge.returned { background: #FEF3C7; color: #92400E; }
+
+  .order-table .amount {
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+  .order-table .move-btn {
+    padding: 3px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+    margin-right: 4px;
+  }
+  .order-table .move-btn:hover { opacity: 0.8; }
+  .order-table .move-btn.to-processing { background: #DBEAFE; color: #1E40AF; }
+  .order-table .move-btn.to-ready { background: #D1FAE5; color: #065F46; }
+  .order-table .move-btn.to-paid { background: #EDE9FE; color: #5B21B6; }
+  .order-table .view-btn {
+    background: none;
+    border: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+  .order-table .view-btn:hover {
+    background: var(--bg-alt);
+    color: var(--ink);
+  }
+
+  .empty-state-custom {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ink-faint);
+  }
+  .empty-state-custom .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state-custom h3 { color: var(--ink-soft); font-size: 15px; margin-bottom: 4px; }
+  .empty-state-custom p { font-size: 13px; }
+
+  .table-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .table-toolbar .left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .table-toolbar .count {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .table-toolbar .count strong {
+    color: var(--ink);
+  }
+</style>
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+
+renderShell({
+  active: "kanban",
+  title: "Order Tracking",
+  subtitle: "Track and manage orders by status",
+  actions: `<a href="new-bill.html" class="btn btn-primary">${Icons.plus} New Bill</a>`
+});
+
+const content = document.getElementById("content");
+
+// Status definitions
+const STATUSES = {
+    PENDING: { label: 'Pending', icon: '⏳', color: 'pending', next: 'PROCESSING' },
+    PROCESSING: { label: 'Processing', icon: '🔧', color: 'processing', next: 'READY' },
+    READY: { label: 'Ready', icon: '✅', color: 'ready', next: 'PAID' },
+    PAID: { label: 'Completed', icon: '💰', color: 'paid', next: null }
+};
+
+const STATUS_ORDER = ['PENDING', 'PROCESSING', 'READY', 'PAID'];
+const STATUS_NEXT_MAP = {
+    'PENDING': 'PROCESSING',
+    'PROCESSING': 'READY',
+    'READY': 'PAID'
+};
+
+let allBills = {};
+let currentStatus = 'PENDING';
+
+// Build the UI
+content.innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Orders</h2>
+        <div class="card-head-sub" id="result-count"></div>
+      </div>
+      <div class="flex gap-12 items-center">
+        <div class="search-box">
+          ${Icons.search}
+          <input type="search" id="search-input" placeholder="Search by customer or receipt...">
+        </div>
+      </div>
+    </div>
+    <div style="padding:16px 24px 0;">
+      <div class="status-filters" id="status-filters"></div>
+    </div>
+    <div style="padding:0 24px 24px;">
+      <div id="order-container">
+        <div class="loading-overlay"><span class="spinner dark"></span> Loading orders...</div>
+      </div>
+    </div>
+  </div>
+`;
+
+// Render status filter buttons
+function renderFilters() {
+    const container = document.getElementById('status-filters');
+    container.innerHTML = STATUS_ORDER.map(status => {
+        const info = STATUSES[status];
+        const count = (allBills[status] || []).length;
+        const isActive = currentStatus === status;
+        return `
+            <button class="status-filter-btn ${info.color} ${isActive ? 'active' : ''}" data-status="${status}">
+                ${info.icon} ${info.label}
+                <span class="badge">${count}</span>
+            </button>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.status-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentStatus = btn.dataset.status;
+            renderFilters();
+            renderOrders();
+            document.getElementById('search-input').value = '';
+        });
+    });
+}
+
+// Render orders in table
+function renderOrders() {
+    const container = document.getElementById('order-container');
+    const bills = allBills[currentStatus] || [];
+    const info = STATUSES[currentStatus];
+
+    document.getElementById('result-count').textContent = `${bills.length} order${bills.length === 1 ? '' : 's'}`;
+
+    if (bills.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state-custom">
+                <div class="icon">📭</div>
+                <h3>No ${info.label.toLowerCase()} orders</h3>
+                <p>Orders will appear here when they move to ${info.label.toLowerCase()} status.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = `
+        <div class="table-toolbar">
+            <div class="left">
+                <span class="count">Showing <strong>${bills.length}</strong> ${info.label.toLowerCase()} orders</span>
+            </div>
+        </div>
+        <div class="order-table-wrap">
+            <table class="order-table">
+                <thead>
+                    <tr>
+                        <th>Receipt</th>
+                        <th>Customer</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th style="text-align:center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    bills.forEach(bill => {
+        const status = bill.status;
+        const nextStatus = STATUS_NEXT_MAP[status];
+        
+        let moveButton = '';
+        if (nextStatus && status !== 'PAID' && status !== 'VOIDED' && status !== 'RETURNED') {
+            const nextInfo = STATUSES[nextStatus];
+            moveButton = `
+                <button class="move-btn to-${nextStatus.toLowerCase()}" onclick="event.stopPropagation(); moveStatus(${bill.receiptNo}, '${nextStatus}')">
+                    → ${nextInfo.label}
+                </button>
+            `;
+        }
+
+        html += `
+            <tr onclick="viewBill(${bill.receiptNo})">
+                <td class="receipt">#${String(bill.receiptNo).padStart(3, '0')}</td>
+                <td class="customer">${escapeHtml(bill.customerName)}</td>
+                <td>${bill.items ? bill.items.length : 0}</td>
+                <td class="amount">${formatMoney(bill.finalAmount || bill.totalAmount)}</td>
+                <td style="color:var(--ink-soft);white-space:nowrap;">${formatDate(bill.createDate)}</td>
+                <td><span class="status-badge ${status.toLowerCase()}">${STATUSES[status]?.icon || ''} ${STATUSES[status]?.label || status}</span></td>
+                <td style="text-align:center;white-space:nowrap;">
+                    ${moveButton}
+                    <button class="view-btn" onclick="event.stopPropagation(); viewBill(${bill.receiptNo})">👁️</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+// ============================================================
+// MOVE STATUS
+// ============================================================
+async function moveStatus(receiptNo, newStatus) {
+    console.log(`🔄 Moving bill #${receiptNo} to ${newStatus}`);
+    
+    try {
+        const result = await Api.post(`/bills/status/${receiptNo}/${newStatus}`);
+        console.log(`✅ Bill #${receiptNo} moved to ${newStatus}`, result);
+        
+        toastSuccess(`Bill #${String(receiptNo).padStart(3, '0')} → ${STATUSES[newStatus].label}`);
+        
+        // Reload the board
+        await loadBoard();
+    } catch (err) {
+        console.error(`❌ Failed to move bill #${receiptNo}:`, err);
+        toastError(apiErrorMessage(err));
+    }
+}
+
+// ============================================================
+// VIEW BILL
+// ============================================================
+function viewBill(receiptNo) {
+    window.location.href = `bill-detail.html?receipt=${receiptNo}`;
+}
+
+// ============================================================
+// LOAD BOARD
+// ============================================================
+async function loadBoard() {
+    try {
+        console.log("📊 Loading order board...");
+        const response = await Api.get('/bills/status/all');
+        allBills = response;
+        console.log("✅ Board loaded:", Object.keys(allBills).length, "statuses");
+        renderFilters();
+        renderOrders();
+    } catch (err) {
+        console.error("❌ Failed to load board:", err);
+        document.getElementById('order-container').innerHTML = `
+            <div class="empty-state-custom">
+                <div class="icon">❌</div>
+                <h3>Failed to load orders</h3>
+                <p>${apiErrorMessage(err)}</p>
+                <button class="btn btn-primary" onclick="loadBoard()" style="margin-top:12px;">Retry</button>
+            </div>
+        `;
+        toastError(apiErrorMessage(err));
+    }
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+document.addEventListener('input', function(e) {
+    if (e.target && e.target.id === 'search-input') {
+        const query = e.target.value.trim().toLowerCase();
+        const rows = document.querySelectorAll('.order-table tbody tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(query) ? '' : 'none';
+        });
+    }
+});
+
+// ============================================================
+// INITIAL LOAD
+// ============================================================
+loadBoard();
+
+// Auto-refresh every 30 seconds
+setInterval(loadBoard, 30000);
+</script>
+</body>
+</html>

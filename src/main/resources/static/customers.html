@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customers · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+
+renderShell({
+    active: "customers",
+    title: "Customers",
+    subtitle: "Manage customer profiles and history",
+    actions: `<button class="btn btn-primary" id="add-customer-btn">${Icons.plus} Add Customer</button>`
+});
+
+const content = document.getElementById("content");
+let CUSTOMERS = [];
+
+content.innerHTML = `
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>All Customers</h2>
+                <div class="card-head-sub" id="result-count"></div>
+            </div>
+            <div class="search-box">
+                ${Icons.search}
+                <input type="search" id="search-input" placeholder="Search by name or phone...">
+            </div>
+        </div>
+        <div class="table-wrap" id="table-region">
+            <div class="loading-overlay"><span class="spinner dark"></span> Loading customers…</div>
+        </div>
+    </div>
+`;
+
+// Load customers
+async function loadCustomers() {
+    try {
+        CUSTOMERS = await Api.get("/customers");
+        render();
+    } catch (err) {
+        document.getElementById("table-region").innerHTML = `<div class="empty-state"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+        toastError(apiErrorMessage(err));
+    }
+}
+
+function render() {
+    document.getElementById("result-count").textContent = `${CUSTOMERS.length} customer${CUSTOMERS.length === 1 ? "" : "s"}`;
+    const region = document.getElementById("table-region");
+    if (!CUSTOMERS.length) {
+        region.innerHTML = `<div class="empty-state">${Icons.users}<h3>No customers yet</h3><p>Add your first customer to get started.</p></div>`;
+        return;
+    }
+    region.innerHTML = `
+        <table>
+            <thead><tr><th>Name</th><th>Phone</th><th>Orders</th><th>Total Spent</th><th>Last Order</th><th></th></tr></thead>
+            <tbody>
+                ${CUSTOMERS.map(c => `
+                    <tr>
+                        <td class="td-strong">${escapeHtml(c.name)}</td>
+                        <td class="td-muted">${escapeHtml(c.phone || "—")}</td>
+                        <td>${c.totalOrders || 0}</td>
+                        <td class="td-num">${formatMoney(c.totalSpent || 0)}</td>
+                        <td class="td-muted">${formatDate(c.lastOrderDate)}</td>
+                        <td>
+                            <button class="icon-btn" data-view="${c.id}" title="View / Edit">${Icons.eye}</button>
+                        </td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
+
+    region.querySelectorAll("[data-view]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const customer = CUSTOMERS.find(c => c.id == btn.dataset.view);
+            if (customer) openCustomerModal(customer);
+        });
+    });
+}
+
+// View / Edit customer modal
+function openCustomerModal(customer) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay open";
+    overlay.innerHTML = `
+        <div class="modal">
+            <div class="modal-head">
+                <h3 style="font-size:16px;">Customer Details</h3>
+                <button class="icon-btn" id="ecm-close">${Icons.x}</button>
+            </div>
+            <div class="modal-body">
+                <div class="field">
+                    <label>Full Name *</label>
+                    <input type="text" id="ecm-name" value="${escapeHtml(customer.name || "")}">
+                </div>
+                <div class="field">
+                    <label>Phone Number *</label>
+                    <input type="tel" id="ecm-phone" value="${escapeHtml(customer.phone || "")}" placeholder="03xxxxxxxxx (11 digits)">
+                </div>
+                <div class="field">
+                    <label>Email *</label>
+                    <input type="email" id="ecm-email" value="${escapeHtml(customer.email || "")}">
+                </div>
+                <div class="field">
+                    <label>Notes</label>
+                    <textarea id="ecm-notes" rows="2">${escapeHtml(customer.notes || "")}</textarea>
+                </div>
+                <div class="field-row" style="display:flex;gap:16px;font-size:12px;color:var(--ink-soft);margin-top:4px;">
+                    <span>${customer.totalOrders || 0} orders</span>
+                    <span>${formatMoney(customer.totalSpent || 0)} spent</span>
+                    <span>Last order: ${formatDate(customer.lastOrderDate)}</span>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn btn-secondary" id="ecm-cancel">Cancel</button>
+                <button class="btn btn-primary" id="ecm-save">${Icons.check} Save Changes</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.querySelector("#ecm-close").addEventListener("click", close);
+    overlay.querySelector("#ecm-cancel").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+    overlay.querySelector("#ecm-save").addEventListener("click", async () => {
+        const name = overlay.querySelector("#ecm-name").value.trim();
+        const phone = overlay.querySelector("#ecm-phone").value.trim();
+        const email = overlay.querySelector("#ecm-email").value.trim();
+        const notes = overlay.querySelector("#ecm-notes").value.trim();
+
+        if (!name) { toastError("Customer name is required"); return; }
+        const cleanPhone = phone.replace(/[^0-9]/g, "");
+        if (cleanPhone.length !== 11) { toastError("Phone number must be exactly 11 digits"); return; }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) { toastError("Please enter a valid email address"); return; }
+
+        try {
+            // The backend rejects this if the phone/email already belongs to a
+            // *different* customer, so this can never silently overwrite someone else's record.
+            await Api.put(`/customers/${customer.id}`, {
+                name, phone: cleanPhone, email, notes: notes || null
+            });
+            toastSuccess("Customer updated successfully");
+            close();
+            loadCustomers();
+        } catch (err) {
+            toastError(apiErrorMessage(err));
+        }
+    });
+}
+
+// Search
+document.getElementById("search-input").addEventListener("input", debounce(async (e) => {
+    const query = e.target.value.trim();
+    try {
+        if (query) {
+            CUSTOMERS = await Api.get(`/customers/search?q=${encodeURIComponent(query)}`);
+        } else {
+            CUSTOMERS = await Api.get("/customers");
+        }
+        render();
+    } catch (err) {
+        toastError(apiErrorMessage(err));
+    }
+}, 300));
+
+loadCustomers();
+
+// Add customer modal
+document.getElementById("add-customer-btn").addEventListener("click", () => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay open";
+    overlay.innerHTML = `
+        <div class="modal">
+            <div class="modal-head">
+                <h3 style="font-size:16px;">Add Customer</h3>
+                <button class="icon-btn" id="cm-close">${Icons.x}</button>
+            </div>
+            <div class="modal-body">
+                <div class="field">
+                    <label>Full Name *</label>
+                    <input type="text" id="cm-name" placeholder="Customer name">
+                </div>
+                <div class="field">
+                    <label>Phone Number *</label>
+                    <input type="tel" id="cm-phone" placeholder="03xxxxxxxxx (11 digits)">
+                </div>
+                <div class="field">
+                    <label>Email *</label>
+                    <input type="email" id="cm-email" placeholder="customer@example.com">
+                </div>
+                <div class="field">
+                    <label>Notes</label>
+                    <textarea id="cm-notes" rows="2" placeholder="Any special notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn btn-secondary" id="cm-cancel">Cancel</button>
+                <button class="btn btn-primary" id="cm-save">${Icons.check} Add Customer</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    const close = () => overlay.remove();
+    overlay.querySelector("#cm-close").addEventListener("click", close);
+    overlay.querySelector("#cm-cancel").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    
+    overlay.querySelector("#cm-save").addEventListener("click", async () => {
+        const name = overlay.querySelector("#cm-name").value.trim();
+        const phone = overlay.querySelector("#cm-phone").value.trim();
+        const email = overlay.querySelector("#cm-email").value.trim();
+
+        if (!name) { toastError("Customer name is required"); return; }
+
+        const cleanPhone = phone.replace(/[^0-9]/g, "");
+        if (!cleanPhone) { toastError("Phone number is required"); return; }
+        if (cleanPhone.length !== 11) { toastError("Phone number must be exactly 11 digits"); return; }
+
+        if (!email) { toastError("Email is required"); return; }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) { toastError("Please enter a valid email address"); return; }
+
+        try {
+            await Api.post("/customers", {
+                name: name,
+                phone: cleanPhone,
+                email: email,
+                notes: overlay.querySelector("#cm-notes").value.trim() || null
+            });
+            toastSuccess("Customer added successfully");
+            close();
+            loadCustomers();
+        } catch (err) {
+            toastError(apiErrorMessage(err));
+        }
+    });
+});
+</script>
+</body>
+</html>

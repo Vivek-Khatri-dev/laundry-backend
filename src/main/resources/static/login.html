@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<div class="login-shell">
+  <div class="login-brand-panel">
+    <svg class="fold-pattern" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="folds" width="60" height="60" patternUnits="userSpaceOnUse">
+          <path d="M0 30 Q15 10 30 30 T60 30" stroke="#EAF3F2" stroke-width="1.4" fill="none"/>
+        </pattern>
+      </defs>
+      <rect width="400" height="400" fill="url(#folds)"/>
+    </svg>
+
+    <div style="position:relative;z-index:1;">
+      <div class="brand">
+        <span class="brand-mark">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H27l9 9v1c-2.2 0-2.2 3-2.2 3s0 3 2.2 3v1l-9 9H6.5A2.5 2.5 0 0 1 4 29.5z" fill="#EAF3F2"/>
+            <circle cx="10.5" cy="12" r="1.6" fill="#103B49" opacity=".4"/>
+            <path d="M14 12.5h4.6c3.3 0 5.6 2.4 5.6 5.5s-2.3 5.5-5.6 5.5H14z" stroke="#103B49" stroke-width="2.1" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </span>
+        <span>
+          <span class="brand-word">Dawson's</span>
+          <span class="brand-tag">Laundry Co.</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="login-quote">
+      <p>Every garment, tracked from counter to collection — no ticket ever goes missing.</p>
+      <div class="cite">Front-of-house management</div>
+    </div>
+  </div>
+
+  <div class="login-form-panel">
+    <div class="login-card">
+      <h2>Welcome back</h2>
+      <p class="sub">Sign in with your staff account to open the counter.</p>
+
+      <div class="login-error" id="login-error">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4.5M12 17h.01"/><path d="M10.4 3.9 2.3 18a1.7 1.7 0 0 0 1.5 2.5h16.4a1.7 1.7 0 0 0 1.5-2.5L13.6 3.9a1.7 1.7 0 0 0-3.2 0z"/></svg>
+        <span id="login-error-text">Invalid username or password.</span>
+      </div>
+
+
+      <form id="login-form">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="e.g. admin" autocomplete="username" required autofocus>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="login-btn" style="padding:11px;">
+          Sign in
+        </button>
+      </form>
+
+      <p class="login-foot-note">Forgot your password? Ask an administrator to reset your account.</p>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+  // Already signed in? Skip straight to the dashboard.
+  if (Auth.token()) location.href = "dashboard.html";
+
+  const params = new URLSearchParams(location.search);
+  if (params.get("expired")) {
+    showError("Your session expired. Please sign in again.");
+  }
+
+  function showError(msg) {
+    document.getElementById("login-error-text").textContent = msg;
+    document.getElementById("login-error").classList.add("show");
+  }
+  function hideError() {
+    document.getElementById("login-error").classList.remove("show");
+  }
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    hideError();
+    const btn = document.getElementById("login-btn");
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Signing in…';
+
+    try {
+      const res = await Api.post("/auth/login", { username, password });
+      Auth.save({
+        token: res.token,
+        userId: res.userId,
+        fullName: res.fullName,
+        username: res.username,
+        role: res.role
+      });
+      location.href = "dashboard.html";
+    } catch (err) {
+      showError(err.status === 401 || err.status === 403
+        ? "Incorrect username or password."
+        : apiErrorMessage(err));
+      btn.disabled = false;
+      btn.textContent = "Sign in";
+    }
+  });
+</script>
+</body>
+</html>

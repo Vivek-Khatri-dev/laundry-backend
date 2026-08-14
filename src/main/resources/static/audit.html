@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Log · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+if (!Auth.isAdmin()) { location.href = "dashboard.html"; }
+
+renderShell({
+  active: "audit",
+  title: "Audit Log",
+  subtitle: "A complete, unfiltered history of every action taken in the system"
+});
+
+const content = document.getElementById("content");
+content.innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <div><h2>All activity</h2><div class="card-head-sub" id="result-count"></div></div>
+      <div class="search-box">
+        ${Icons.search}
+        <input type="search" id="search-input" placeholder="Search by actor, action, or entity">
+      </div>
+    </div>
+    <div class="table-wrap" id="table-region">
+      <div class="loading-overlay"><span class="spinner dark"></span> Loading audit trail…</div>
+    </div>
+  </div>
+`;
+
+let ENTRIES = [];
+let searchTerm = "";
+
+(async function init() {
+  try {
+    ENTRIES = await Api.get("/audit");
+    render();
+  } catch (err) {
+    document.getElementById("table-region").innerHTML = `<div class="empty-state"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+})();
+
+document.getElementById("search-input").addEventListener("input", debounce((e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  render();
+}, 200));
+
+function render() {
+  let entries = ENTRIES;
+  if (searchTerm) {
+    entries = entries.filter(e =>
+      (e.actor || "").toLowerCase().includes(searchTerm) ||
+      (e.action || "").toLowerCase().includes(searchTerm) ||
+      (e.entityType || "").toLowerCase().includes(searchTerm) ||
+      (e.details || "").toLowerCase().includes(searchTerm)
+    );
+  }
+  document.getElementById("result-count").textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
+
+  const region = document.getElementById("table-region");
+  if (!entries.length) {
+    region.innerHTML = `<div class="empty-state">${Icons.shield}<h3>No matching activity</h3><p>Try a different search term.</p></div>`;
+    return;
+  }
+  region.innerHTML = `
+    <table>
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+      <tbody>
+        ${entries.map(e => `
+          <tr>
+            <td class="td-muted" style="white-space:nowrap;">${formatDateTime(e.timestamp)}</td>
+            <td class="td-strong">${escapeHtml(e.actor)}</td>
+            <td><span class="ticket-badge" style="background:var(--primary-soft); color:var(--primary);">${escapeHtml(e.action)}</span></td>
+            <td class="td-muted">${escapeHtml(e.entityType)}${e.entityId ? " #" + e.entityId : ""}</td>
+            <td class="td-muted">${escapeHtml(e.details || "—")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+</script>
+</body>
+</html>

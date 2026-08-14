@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bills · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+  /* Filter Bar Styles */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--surface-sunken);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .filter-bar .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-bar .filter-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .filter-bar .filter-group input,
+  .filter-bar .filter-group select {
+    padding: 6px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    min-width: 100px;
+  }
+  .filter-bar .filter-group input:focus,
+  .filter-bar .filter-group select:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .filter-bar .filter-group input[type="number"] {
+    min-width: 70px;
+    width: 70px;
+  }
+  .filter-bar .filter-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .filter-bar .filter-actions .btn {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+  .filter-bar .filter-actions .btn-clear {
+    background: var(--surface);
+    color: var(--ink-soft);
+    border: 1px solid var(--border-strong);
+  }
+  .filter-bar .filter-actions .btn-clear:hover {
+    background: var(--bg-alt);
+  }
+  .filter-bar .filter-actions .btn-apply {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+  }
+  .filter-bar .filter-actions .btn-apply:hover {
+    background: var(--accent-hover);
+  }
+  .filter-bar .filter-group .range-separator {
+    color: var(--ink-faint);
+    font-size: 12px;
+  }
+  
+  .filter-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .filter-stats .count {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .filter-stats .clear-filter-link {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+  }
+  .filter-stats .clear-filter-link:hover {
+    color: var(--accent-hover);
+  }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th {
+    text-align: left;
+    padding: 12px 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    background: var(--surface-sunken);
+  }
+  tbody td { padding: 14px 20px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background .12s var(--ease); cursor: pointer; }
+  tbody tr:hover { background: var(--surface-sunken); }
+  .td-strong { font-weight: 600; color: var(--ink); }
+  .td-muted { color: var(--ink-soft); }
+  .td-num { font-variant-numeric:tabular-nums; }
+  .row-actions { display:flex; gap:6px; justify-content:flex-end; }
+  
+  .empty-state {
+    text-align: center;
+    padding: 64px 24px;
+    color: var(--ink-soft);
+  }
+  .empty-state svg { width: 46px; height:46px; color: var(--ink-faint); margin-bottom: 14px; }
+  .empty-state h3 { color: var(--ink); font-size: 15px; margin-bottom: 4px; }
+  .empty-state p { font-size: 13px; margin: 0 0 16px; }
+  
+  .loading-overlay { display:flex; align-items:center; justify-content:center; padding:60px; color:var(--ink-soft); gap:10px; }
+  .spinner {
+    width:16px;height:16px;border-radius:50%;border:2px solid var(--border-strong);border-top-color:var(--accent);
+    animation:spin .7s linear infinite; display:inline-block;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  @media (max-width: 768px) {
+    .filter-bar { flex-direction: column; align-items: stretch; }
+    .filter-bar .filter-group { flex-wrap: wrap; }
+    .filter-bar .filter-actions { margin-left: 0; }
+    .filter-bar .filter-group input { min-width: 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+
+renderShell({
+  active: "bills",
+  title: "Bills",
+  subtitle: "Search, filter, and manage all orders",
+  actions: `<a href="new-bill.html" class="btn btn-primary">${Icons.plus} New Bill</a>`
+});
+
+const content = document.getElementById("content");
+let ALL_BILLS = [];
+let FILTERED_BILLS = [];
+
+// Filter state
+const filters = {
+  status: 'ALL',
+  dateFrom: '',
+  dateTo: '',
+  amountMin: '',
+  amountMax: '',
+  search: ''
+};
+
+content.innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>All bills</h2>
+        <div class="card-head-sub" id="result-count"></div>
+      </div>
+    </div>
+    
+    <!-- Filter Bar -->
+    <div style="padding:0 24px;">
+      <div class="filter-bar" id="filter-bar">
+        <!-- Status Filter -->
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="filter-status">
+            <option value="ALL">All</option>
+            <option value="PENDING">Pending</option>
+            <option value="PAID">Paid</option>
+            <option value="READY">Ready</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="RETURNED">Returned</option>
+            <option value="VOIDED">Voided</option>
+          </select>
+        </div>
+        
+        <!-- Date Range -->
+        <div class="filter-group">
+          <label>From</label>
+          <input type="date" id="filter-date-from">
+        </div>
+        <div class="filter-group">
+          <label>To</label>
+          <input type="date" id="filter-date-to">
+        </div>
+        
+        <!-- Amount Range -->
+        <div class="filter-group">
+          <label>Amount</label>
+          <input type="number" id="filter-amount-min" placeholder="Min" min="0">
+          <span class="range-separator">-</span>
+          <input type="number" id="filter-amount-max" placeholder="Max" min="0">
+        </div>
+        
+        <!-- Search -->
+        <div class="filter-group" style="flex:1;min-width:150px;">
+          <label>Search</label>
+          <input type="text" id="filter-search" placeholder="Customer or receipt..." style="min-width:120px;">
+        </div>
+        
+        <!-- Actions -->
+        <div class="filter-actions">
+          <button class="btn btn-clear" id="filter-clear">Clear</button>
+          <button class="btn btn-apply" id="filter-apply">Apply</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Filter Stats -->
+    <div style="padding:0 24px;">
+      <div class="filter-stats" id="filter-stats">
+        <span>Showing <span class="count" id="filtered-count">0</span> bills</span>
+        <span class="clear-filter-link" id="clear-all-filters" style="display:none;">Clear all filters</span>
+      </div>
+    </div>
+    
+    <div class="table-wrap" id="table-region" style="margin-top:4px;">
+      <div class="loading-overlay"><span class="spinner dark"></span> Loading bills…</div>
+    </div>
+  </div>
+`;
+
+// ============================================================
+// LOAD BILLS
+// ============================================================
+(async function init() {
+  try {
+    ALL_BILLS = await Api.get("/bills");
+    ALL_BILLS.sort((a, b) => b.receiptNo - a.receiptNo);
+    applyFilters();
+  } catch (err) {
+    document.getElementById("table-region").innerHTML = `<div class="empty-state"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+})();
+
+// ============================================================
+// FILTER FUNCTIONS
+// ============================================================
+function applyFilters() {
+  // Read filter values
+  filters.status = document.getElementById('filter-status').value;
+  filters.dateFrom = document.getElementById('filter-date-from').value;
+  filters.dateTo = document.getElementById('filter-date-to').value;
+  filters.amountMin = document.getElementById('filter-amount-min').value;
+  filters.amountMax = document.getElementById('filter-amount-max').value;
+  filters.search = document.getElementById('filter-search').value.trim().toLowerCase();
+  
+  // Apply filters
+  FILTERED_BILLS = ALL_BILLS.filter(bill => {
+    // Status filter
+    if (filters.status !== 'ALL' && bill.status !== filters.status) {
+      return false;
+    }
+    
+    // Date range filter
+    if (filters.dateFrom) {
+      const billDate = bill.createDate;
+      if (billDate < filters.dateFrom) return false;
+    }
+    if (filters.dateTo) {
+      const billDate = bill.createDate;
+      if (billDate > filters.dateTo) return false;
+    }
+    
+    // Amount range filter
+    if (filters.amountMin) {
+      const min = parseFloat(filters.amountMin);
+      if (bill.totalAmount < min) return false;
+    }
+    if (filters.amountMax) {
+      const max = parseFloat(filters.amountMax);
+      if (bill.totalAmount > max) return false;
+    }
+    
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search;
+      const customerMatch = bill.customerName.toLowerCase().includes(searchLower);
+      const phoneMatch = (bill.customerPhone || '').toLowerCase().includes(searchLower);
+      const receiptMatch = String(bill.receiptNo).includes(searchLower);
+      if (!customerMatch && !phoneMatch && !receiptMatch) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+  
+  renderTable();
+  updateStats();
+}
+
+function updateStats() {
+  const count = FILTERED_BILLS.length;
+  document.getElementById('filtered-count').textContent = count;
+  document.getElementById('result-count').textContent = `${count} bill${count === 1 ? '' : 's'}`;
+  
+  // Show/hide clear all link
+  const hasFilters = filters.status !== 'ALL' || 
+                     filters.dateFrom || 
+                     filters.dateTo || 
+                     filters.amountMin || 
+                     filters.amountMax || 
+                     filters.search;
+  document.getElementById('clear-all-filters').style.display = hasFilters ? 'inline' : 'none';
+}
+
+function resetFilters() {
+  document.getElementById('filter-status').value = 'ALL';
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value = '';
+  document.getElementById('filter-amount-min').value = '';
+  document.getElementById('filter-amount-max').value = '';
+  document.getElementById('filter-search').value = '';
+  applyFilters();
+  toastSuccess('All filters cleared');
+}
+
+// ============================================================
+// RENDER TABLE
+// ============================================================
+function renderTable() {
+  const region = document.getElementById('table-region');
+  const bills = FILTERED_BILLS;
+  
+  if (!bills.length) {
+    region.innerHTML = `
+      <div class="empty-state">
+        ${Icons.ticket}
+        <h3>No bills match your filters</h3>
+        <p>Try adjusting your search criteria or clear all filters.</p>
+        <button class="btn btn-secondary" id="empty-clear-btn">Clear all filters</button>
+      </div>`;
+    document.getElementById('empty-clear-btn')?.addEventListener('click', resetFilters);
+    return;
+  }
+
+  region.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Receipt</th><th>Customer</th><th>Phone</th><th>Billed</th><th>Delivery</th>
+          <th>Total</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${bills.map(b => `
+          <tr class="clickable" data-receipt="${b.receiptNo}">
+            <td class="td-strong">#${String(b.receiptNo).padStart(3, "0")}</td>
+            <td>${escapeHtml(b.customerName)}</td>
+            <td class="td-muted">${escapeHtml(b.customerPhone || "—")}</td>
+            <td class="td-muted">${formatDate(b.createDate)}</td>
+            <td class="td-muted">${formatDate(b.deliveryDate)}</td>
+            <td class="td-num td-strong">${formatMoney(b.finalAmount || b.totalAmount)}</td>
+            <td>${statusBadge(b.status)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" title="View" data-view="${b.receiptNo}">${Icons.eye}</button>
+              </div>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+
+  // Click handlers
+  region.querySelectorAll("tr[data-receipt]").forEach(row => {
+    row.addEventListener("click", (e) => {
+      // Don't navigate if clicked on button
+      if (e.target.closest('.icon-btn')) return;
+      location.href = `bill-detail.html?receipt=${row.dataset.receipt}`;
+    });
+  });
+
+  region.querySelectorAll("[data-view]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      location.href = `bill-detail.html?receipt=${btn.dataset.view}`;
+    });
+  });
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+document.getElementById('filter-apply').addEventListener('click', applyFilters);
+document.getElementById('filter-clear').addEventListener('click', resetFilters);
+document.getElementById('clear-all-filters').addEventListener('click', resetFilters);
+
+// Auto-apply on Enter key in search
+document.getElementById('filter-search').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    applyFilters();
+  }
+});
+
+// Auto-apply on Enter key in amount fields
+document.getElementById('filter-amount-min').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    applyFilters();
+  }
+});
+document.getElementById('filter-amount-max').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    applyFilters();
+  }
+});
+
+// Auto-apply on date change (optional - uncomment if desired)
+// document.getElementById('filter-date-from').addEventListener('change', applyFilters);
+// document.getElementById('filter-date-to').addEventListener('change', applyFilters);
+// document.getElementById('filter-status').addEventListener('change', applyFilters);
+
+// ============================================================
+// KEYBOARD SHORTCUTS (Ctrl+F for search focus)
+// ============================================================
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+    // Check if we're on bills page
+    if (window.location.pathname.includes('bills.html')) {
+      e.preventDefault();
+      document.getElementById('filter-search').focus();
+      document.getElementById('filter-search').select();
+    }
+  }
+});
+
+console.log('Bills page loaded with advanced search!');
+</script>
+</body>
+</html>

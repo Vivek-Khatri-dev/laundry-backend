@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Accounts · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+if (!Auth.isAdmin()) { location.href = "dashboard.html"; }
+
+renderShell({
+  active: "users",
+  title: "Staff Accounts",
+  subtitle: "Everyone who can log in to the counter",
+  actions: `<button class="btn btn-primary" id="add-user-btn">${Icons.plus} Add account</button>`
+});
+
+const content = document.getElementById("content");
+content.innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <div><h2>All accounts</h2><div class="card-head-sub" id="result-count"></div></div>
+    </div>
+    <div class="table-wrap" id="table-region">
+      <div class="loading-overlay"><span class="spinner dark"></span> Loading accounts…</div>
+    </div>
+  </div>
+`;
+
+let USERS = [];
+async function load() {
+  try {
+    USERS = await Api.get("/users");
+    renderTable();
+  } catch (err) {
+    document.getElementById("table-region").innerHTML = `<div class="empty-state"><p class="text-muted">${apiErrorMessage(err)}</p></div>`;
+    toastError(apiErrorMessage(err));
+  }
+}
+load();
+
+function renderTable() {
+  document.getElementById("result-count").textContent = `${USERS.length} account${USERS.length === 1 ? "" : "s"}`;
+  const region = document.getElementById("table-region");
+  if (!USERS.length) {
+    region.innerHTML = `<div class="empty-state">${Icons.users}<h3>No accounts yet</h3></div>`;
+    return;
+  }
+  const session = Auth.get();
+  region.innerHTML = `
+    <table>
+      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${USERS.map(u => `
+          <tr>
+            <td class="td-strong">${escapeHtml(u.fullName)}</td>
+            <td class="td-muted">${escapeHtml(u.username)}</td>
+            <td><span class="role-pill role-${u.role.toLowerCase()}">${u.role}</span></td>
+            <td><span class="state-dot ${u.active ? "on" : "off"}"></span>${u.active ? "Active" : "Deactivated"}</td>
+            <td>
+              <div class="row-actions">
+                ${u.id === session.userId ? `<span class="text-muted text-sm">This is you</span>` : `
+                  <button class="icon-btn" title="${u.active ? "Deactivate" : "Reactivate"}" data-toggle="${u.id}" data-active="${u.active}">
+                    ${u.active ? Icons.ban : Icons.undo}
+                  </button>`}
+              </div>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+  region.querySelectorAll("[data-toggle]").forEach(btn => btn.addEventListener("click", () => toggleUser(btn.dataset.toggle, btn.dataset.active === "true")));
+}
+
+async function toggleUser(id, isActive) {
+  const ok = await confirmDialog({
+    title: isActive ? "Deactivate account" : "Reactivate account",
+    message: isActive ? "They won't be able to log in until reactivated." : "They'll be able to log in again.",
+    confirmLabel: isActive ? "Deactivate" : "Reactivate",
+    danger: isActive
+  });
+  if (!ok) return;
+  try {
+    await Api.post(`/users/${id}/${isActive ? "deactivate" : "reactivate"}`);
+    toastSuccess(isActive ? "Account deactivated" : "Account reactivated");
+    load();
+  } catch (err) {
+    toastError(apiErrorMessage(err));
+  }
+}
+
+document.getElementById("add-user-btn").addEventListener("click", () => {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay open";
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <h3 style="font-size:16px;">Add staff account</h3>
+        <button class="icon-btn" id="um-close">${Icons.x}</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Full name</label><input type="text" id="um-name" placeholder="e.g. Bilal Ahmed"></div>
+        <div class="field"><label>Username</label><input type="text" id="um-username" placeholder="e.g. bilal" minlength="3"></div>
+        <div class="field"><label>Password</label><input type="password" id="um-password" placeholder="At least 6 characters" minlength="6"></div>
+        <div class="field">
+          <label>Role</label>
+          <select id="um-role">
+            <option value="CASHIER">Cashier</option>
+            <option value="ADMIN">Administrator</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" id="um-cancel">Cancel</button>
+        <button class="btn btn-primary" id="um-save">${Icons.check} Create account</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector("#um-close").addEventListener("click", close);
+  overlay.querySelector("#um-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelector("#um-save").addEventListener("click", async () => {
+    const fullName = overlay.querySelector("#um-name").value.trim();
+    const username = overlay.querySelector("#um-username").value.trim();
+    const password = overlay.querySelector("#um-password").value;
+    const role = overlay.querySelector("#um-role").value;
+    if (!fullName || !username || !password) { toastError("Please fill in every field."); return; }
+    if (username.length < 3) { toastError("Username must be at least 3 characters."); return; }
+    if (password.length < 6) { toastError("Password must be at least 6 characters."); return; }
+
+    const btn = overlay.querySelector("#um-save");
+    btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Creating…`;
+    try {
+      await Api.post("/users", { fullName, username, password, role });
+      toastSuccess("Account created");
+      close();
+      load();
+    } catch (err) {
+      toastError(apiErrorMessage(err));
+      btn.disabled = false; btn.innerHTML = `${Icons.check} Create account`;
+    }
+  });
+});
+</script>
+</body>
+</html>

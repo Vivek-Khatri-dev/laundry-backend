@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backup · Dawson's Laundry</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/shortcuts.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mousetrap/1.6.5/mousetrap.min.js"></script>
+<script>
+if (!Auth.requireLogin()) { document.write(""); }
+if (!Auth.isAdmin()) { location.href = "dashboard.html"; }
+
+renderShell({
+  active: "backup",
+  title: "Backup",
+  subtitle: "Download all your data as an Excel file"
+});
+
+const content = document.getElementById("content");
+content.innerHTML = `
+  <div class="card card-pad" style="max-width:560px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div style="width:48px;height:48px;border-radius:12px;background:var(--success-soft);display:flex;align-items:center;justify-content:center;font-size:24px;">📊</div>
+      <div>
+        <h2 style="margin:0;font-size:20px;">Download Backup</h2>
+        <p style="margin:0;color:var(--ink-soft);font-size:13px;">Excel file with all your data</p>
+      </div>
+    </div>
+    
+    <div style="background:var(--primary-soft);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--primary);">
+        <span style="font-weight:600;">📋 Includes:</span>
+        <span>Bills · Products · Users · Audit Log · Summary</span>
+      </div>
+    </div>
+    
+    <button class="btn btn-success btn-block" id="backup-btn" style="padding:14px;font-size:16px;">
+      📥 Download Excel Backup
+    </button>
+    
+    <div id="backup-status" style="margin-top:14px;font-size:13px;color:var(--ink-soft);text-align:center;"></div>
+    <div id="backup-info" style="margin-top:4px;font-size:12px;color:var(--ink-faint);text-align:center;"></div>
+  </div>
+`;
+
+document.getElementById("backup-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("backup-btn");
+  const status = document.getElementById("backup-status");
+  const info = document.getElementById("backup-info");
+  
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> Generating backup...`;
+  status.textContent = "Creating Excel file with your data...";
+  status.style.color = "var(--ink-soft)";
+  info.textContent = "This may take a few moments";
+  
+  try {
+    const startTime = Date.now();
+    
+    await Api.downloadBlob("/backup", `Dawsons_Laundry_Backup.xlsx`);
+    
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    
+    status.innerHTML = `✅ Backup downloaded successfully in ${elapsed} seconds`;
+    status.style.color = "var(--success)";
+    info.textContent = "Check your downloads folder for the Excel file";
+    toastSuccess("Backup downloaded!");
+    
+  } catch (err) {
+    console.error("Backup error:", err);
+    status.innerHTML = `❌ ${apiErrorMessage(err)}`;
+    status.style.color = "var(--danger)";
+    info.textContent = "Please try again or contact support";
+    toastError(apiErrorMessage(err));
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "📥 Download Excel Backup";
+  }
+});
+</script>
+</body>
+</html>
