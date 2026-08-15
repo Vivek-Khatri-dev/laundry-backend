@@ -8,11 +8,9 @@ import com.dawsons.laundry.exception.BadRequestException;
 import com.dawsons.laundry.exception.ResourceNotFoundException;
 import com.dawsons.laundry.repository.RoleRepository;
 import com.dawsons.laundry.repository.UserRepository;
-import com.dawsons.laundry.exception.BadRequestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import jakarta.annotation.PostConstruct;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +24,7 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
-    private static final Logger logger = LoggerFactory.getLogger(SapApiController.class);
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class); // Fixed logger class
 
     public UserService(UserRepository userRepository, RoleRepository roleRepository,
                         PasswordEncoder passwordEncoder, AuditService auditService) {
@@ -91,15 +89,36 @@ public class UserService {
 
     @PostConstruct
     public void createSystemUser() {
-        if (!userRepository.findByUsername("system").isPresent()) {
-            User systemUser = new User();
-            systemUser.setFullName("System User");
-            systemUser.setUsername("system");
-            systemUser.setPasswordHash(passwordEncoder.encode("system123"));
-            systemUser.setRole(roleRepository.findByName("ADMIN").get());
-            systemUser.setActive(true);
-            userRepository.save(systemUser);
-            logger.info("System user created successfully");
+        try {
+            // Step 1: Create ROLE_ADMIN if it doesn't exist
+            Role adminRole = roleRepository.findByName("ROLE_ADMIN")
+                    .orElseGet(() -> {
+                        logger.info("Creating ROLE_ADMIN...");
+                        Role newRole = new Role();
+                        newRole.setName("ROLE_ADMIN");
+                        return roleRepository.save(newRole);
+                    });
+
+            // Step 2: Check if admin user exists
+            Optional<User> existingAdmin = userRepository.findByUsername("admin");
+            
+            if (existingAdmin.isEmpty()) {
+                logger.info("Creating admin user...");
+                User admin = new User();
+                admin.setFullName("System Administrator");
+                admin.setUsername("admin");
+                admin.setPasswordHash(passwordEncoder.encode("admin123"));
+                admin.setRole(adminRole);
+                admin.setActive(true);
+                userRepository.save(admin);
+                logger.info("✅ Admin user created successfully! Username: admin, Password: admin123");
+            } else {
+                logger.info("Admin user already exists.");
+            }
+
+        } catch (Exception e) {
+            logger.error("❌ Error creating system user: {}", e.getMessage());
+            // Don't crash the application
         }
     }
 
