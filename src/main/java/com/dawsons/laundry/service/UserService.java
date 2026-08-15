@@ -91,16 +91,16 @@ public class UserService {
 
     @PostConstruct
     public void createSystemUser() {
-        if (!userRepository.findByUsername("system").isPresent()) {
-            User systemUser = new User();
-            systemUser.setFullName("System User");
-            systemUser.setUsername("system");
-            systemUser.setPasswordHash(passwordEncoder.encode("system123"));
-            systemUser.setRole(roleRepository.findByName("ADMIN").get());
-            systemUser.setActive(true);
-            userRepository.save(systemUser);
-            logger.info("System user created successfully");
-        }
+        // if (!userRepository.findByUsername("system").isPresent()) {
+        //     User systemUser = new User();
+        //     systemUser.setFullName("System User");
+        //     systemUser.setUsername("system");
+        //     systemUser.setPasswordHash(passwordEncoder.encode("system123"));
+        //     systemUser.setRole(roleRepository.findByName("ADMIN").get());
+        //     systemUser.setActive(true);
+        //     userRepository.save(systemUser);
+        //     logger.info("System user created successfully");
+        // }
     }
 
     public Optional<User> findById(Integer id) {
