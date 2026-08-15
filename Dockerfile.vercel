@@ -1,4 +1,4 @@
-# Build stage
+# Build stage - Compile the application
 FROM maven:3.8.8-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
@@ -6,7 +6,7 @@ RUN mvn dependency:go-offline
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Runtime stage - USING ECLIPSE TEMURIN INSTEAD OF OPENJDK
+# Runtime stage - Run the application
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 ENV PORT=8080
