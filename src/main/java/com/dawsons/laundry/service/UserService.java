@@ -90,28 +90,40 @@ public class UserService {
     @PostConstruct
     public void createSystemUser() {
         try {
-            // Step 1: Create ROLE_ADMIN if it doesn't exist
-            Role adminRole = roleRepository.findByName("ROLE_ADMIN")
+            // Make sure both roles exist. Role name must be the BARE name
+            // ("ADMIN"/"CASHIER") because UserPrincipal.getAuthorities()
+            // already prepends "ROLE_" — storing "ROLE_ADMIN" here would
+            // produce the authority "ROLE_ROLE_ADMIN" and break hasRole("ADMIN").
+            Role adminRole = roleRepository.findByName("ADMIN")
                     .orElseGet(() -> {
-                        logger.info("Creating ROLE_ADMIN...");
+                        logger.info("Creating ADMIN role...");
                         Role newRole = new Role();
-                        newRole.setName("ROLE_ADMIN");
+                        newRole.setName("ADMIN");
                         return roleRepository.save(newRole);
                     });
 
-            // Step 2: Check if admin user exists
+            roleRepository.findByName("CASHIER")
+                    .orElseGet(() -> {
+                        logger.info("Creating CASHIER role...");
+                        Role newRole = new Role();
+                        newRole.setName("CASHIER");
+                        return roleRepository.save(newRole);
+                    });
+
+            // Check if admin user exists
             Optional<User> existingAdmin = userRepository.findByUsername("admin");
-            
+
             if (existingAdmin.isEmpty()) {
+                String seedPassword = System.getenv().getOrDefault("SEED_ADMIN_PASSWORD", "Admin@123");
                 logger.info("Creating admin user...");
                 User admin = new User();
                 admin.setFullName("System Administrator");
                 admin.setUsername("admin");
-                admin.setPasswordHash(passwordEncoder.encode("admin123"));
+                admin.setPasswordHash(passwordEncoder.encode(seedPassword));
                 admin.setRole(adminRole);
                 admin.setActive(true);
                 userRepository.save(admin);
-                logger.info("✅ Admin user created successfully! Username: admin, Password: admin123");
+                logger.info("✅ Admin user created successfully! Username: admin");
             } else {
                 logger.info("Admin user already exists.");
             }
