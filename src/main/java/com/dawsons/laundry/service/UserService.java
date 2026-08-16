@@ -24,7 +24,7 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
-    private static final Logger logger = LoggerFactory.getLogger(UserService.class); // Fixed logger class
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
     public UserService(UserRepository userRepository, RoleRepository roleRepository,
                         PasswordEncoder passwordEncoder, AuditService auditService) {
