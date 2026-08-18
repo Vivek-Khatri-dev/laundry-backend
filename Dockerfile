@@ -12,8 +12,10 @@ WORKDIR /app
 ENV PORT=8080
 EXPOSE $PORT
 
-# JVM optimization - More memory for faster startup
-ENV JAVA_OPTS="-Xmx1g -Xms512m -XX:+UseContainerSupport -Djava.security.egd=file:/dev/./urandom -Dspring.jmx.enabled=false"
+# JVM tuned to fit Render free tier's 512MB container.
+# UseSerialGC uses far less memory/CPU overhead than the default G1 GC,
+# which matters a lot on a single shared vCPU with tight RAM.
+ENV JAVA_OPTS="-Xmx320m -Xms128m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:+UseContainerSupport -Djava.security.egd=file:/dev/./urandom -Dspring.jmx.enabled=false"
 
 COPY --from=build /app/target/*.jar app.jar
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
